@@ -1,4 +1,6 @@
-
+code/builds
+code/builds-debug
+code/temp
 code/build-windows.bat
 *.rdbg
 code/builds-debug/windows-msvc/game.exe
