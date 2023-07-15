@@ -1,0 +1,7 @@
+
+code/build-windows.bat
+*.rdbg
+code/builds-debug/windows-msvc/game.exe
+code/builds-debug/windows-msvc/game.ilk
+code/builds-debug/windows-msvc/game.pdb
+code/builds-debug/windows-msvc/vc140.pdb

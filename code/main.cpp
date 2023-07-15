@@ -1,19 +1,22 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "raylib.h"
 
-#if 0
-void
-SetDepthLines()
-{
-	float MaxDepth = CameraHeight/
-}
-#endif
+#define ROAD_SEGMENT_TYPE_COUNT 2
 
 struct depth_line
 {
 	float Depth;
 	float Scale;
+};
+
+struct road_segment
+{
+	float EndRelPX;
+	float Position;
+	
+	float ddX;
 };
 
 void
@@ -37,6 +40,8 @@ main()
 	
 	float fScreenWidth  = 800.0f;
 	float fScreenHeight = 450.0f;
+	
+	float fScreenCenterX = 0.5f*fScreenWidth + 0.5f;
 	
 	bool AudioIsInitialised = false;
 	
@@ -71,8 +76,14 @@ main()
 	//---------------------------------------------------------
 	
 	//NOTE(moritz): Player
-	float PlayerSpeed = 10.0f;
+	float PlayerSpeed = 20.0f;
 	float PlayerP     = 0.0f;
+	
+	//---------------------------------------------------------
+	road_segment NextSegment = {};
+	NextSegment.Position = 50.0f;
+	
+	road_segment BottomSegment = {};
 	
 	//---------------------------------------------------------
 	
@@ -100,7 +111,42 @@ main()
 		//TODO(moritz): Floating point precision for PlayerP
 		PlayerP += dPlayerP;
 		
+		//NOTE(moritz): Update segment position of NextSegment
+		NextSegment.Position -= dPlayerP;
 		
+		if(NextSegment.Position < 0.0f)
+		{
+			BottomSegment = NextSegment;
+			NextSegment.Position = MaxDistance;
+			
+			int Rand = (rand() % 2);
+			
+			if(Rand == 0)
+				NextSegment.EndRelPX =  50.0f;
+			else
+				NextSegment.EndRelPX = -50.0f;
+		}
+		
+		//NOTE(moritz): Update ddX?
+		//TODO(moritz): Maybe only do this, when a new segment enters
+		{
+			float CurveStartX = fScreenCenterX;
+			float CurveEndX   = fScreenCenterX + BottomSegment.EndRelPX;
+			
+			//float DeltaDepthMapP = NextSegment.Position;
+			float DeltaDepthMapP = fDepthLineCount;
+			
+			BottomSegment.ddX = 2.0f*(CurveEndX - CurveStartX)/((DeltaDepthMapP*(DeltaDepthMapP + 1.0f)));
+		}
+		
+		{
+			float CurveStartX = 0.0f;
+			float CurveEndX   = NextSegment.EndRelPX;
+			
+			float DeltaDepthMapP = fDepthLineCount;
+			
+			NextSegment.ddX = 2.0f*(CurveEndX - CurveStartX)/((DeltaDepthMapP*(DeltaDepthMapP + 1.0f)));
+		}
 		
 		BeginDrawing();
 		
@@ -108,6 +154,7 @@ main()
 		DrawFPS(10, 10);
 		
 		//NOTE(moritz): Draw road
+		float dX = 0.0f;
 		float fCurrentCenterX     = fScreenWidth*0.5f + 0.5f; //NOTE(moritz): Road center line 
 		float BaseRoadHalfWidth   = fScreenWidth*0.5f;
 		float BaseStripeHalfWidth = 10.0f;
@@ -115,6 +162,8 @@ main()
 		float Offset = PlayerP;
 		if(Offset > 8.0f)
 			Offset -= 8.0f;
+		
+		road_segment CurrentSegment = BottomSegment;
 		
 		for(int DepthLineIndex = 0;
 			DepthLineIndex < DepthLineCount;
@@ -124,6 +173,12 @@ main()
 			
 			float fRoadWidth   = BaseRoadHalfWidth*DepthLines[DepthLineIndex].Scale;
 			float fStripeWidth = BaseStripeHalfWidth*DepthLines[DepthLineIndex].Scale;
+			
+			if(fDepthLineIndex > NextSegment.Position)
+				CurrentSegment = NextSegment;
+			
+			dX += CurrentSegment.ddX;
+			fCurrentCenterX += dX;
 			
 			float RoadWorldZ = DepthLines[DepthLineIndex].Depth*MaxDistance + Offset;
 			
@@ -141,12 +196,18 @@ main()
 			Vector2 GrassEnd   = {fScreenWidth, fScreenHeight - fDepthLineIndex - 0.5f};
 			DrawLineV(GrassStart, GrassEnd, GrassColor);
 			
-			
 			//NOTE(moritz): Draw road
 			Vector2 RoadStart = {fCurrentCenterX - fRoadWidth, fScreenHeight - fDepthLineIndex - 0.5f};
 			Vector2 RoadEnd   = {fCurrentCenterX + fRoadWidth, fScreenHeight - fDepthLineIndex - 0.5f};
-			DrawLineV(RoadStart, RoadEnd, RoadColor);
 			
+			if(CurrentSegment.ddX > 0.0f)
+				DrawLineV(RoadStart, RoadEnd, RED);
+			else if(CurrentSegment.ddX < 0.0f)
+				DrawLineV(RoadStart, RoadEnd, YELLOW);
+			else
+				DrawLineV(RoadStart, RoadEnd, BLUE);
+			
+			//DrawLineV(RoadStart, RoadEnd, RoadColor);
 			
 			//NOTE(moritz): Draw road stripes
 			if(fmod(RoadWorldZ + 0.5f, 2.0f) > 1.0f) //TODO(moritz): 0.5f -> is stripe offset

@@ -11,4 +11,6 @@ REM Maybe better sound: -s USE_SDL=2
 REM Include before --shell-fil
 REM --preload-file Graphics --preload-file Sounds
 
+cl ../blockborngame/code/main.cpp 
+
 popd
