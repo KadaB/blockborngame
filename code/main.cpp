@@ -30,6 +30,18 @@ ZeroSize(void *InitDest, int Size)
 	}
 }
 
+float
+Clamp(float Min, float Value, float Max)
+{
+	if(Value < Min)
+		return Min;
+	
+	if(Value > Max)
+		return Max;
+	
+	return Value;
+}
+
 void
 DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount,
 		 road_segment BottomSegment, road_segment NextSegment)
@@ -99,9 +111,11 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	}
 }
 
+#if 0
 void
 DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
-			  float Curviness, int ScreenWidth, int ScreenHeight, float fScreenHeight, bool DebugText = false)
+			  float Curviness, int ScreenWidth, int ScreenHeight, float fScreenHeight, depth_line *DepthLines,
+			  int DepthLineCount, bool DebugText = false)
 {
 	//Assert(Distance <= MaxDistance);
 	
@@ -114,17 +128,17 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	if(DebugText)
 		DrawText(TextFormat("TreeScaleInT: %f", ScaleInT), 20, 10, 10, RED);
 	
-	//float MaxDistance = (float)WorldState->DepthLineCount;
+	//float MaxDistance = (float)DepthLineCount;
 	float OneOverMaxDistance = 1.0f/MaxDistance;
 	float BasePDepth = Distance*OneOverMaxDistance;
 	
 	//NOTE(moritz): Go through Depthlines (back to front) and find the first one with equal or smaller depth
 	int BasePDepthLineIndex = -1;
-	for(int DepthLineIndex = (WorldState->DepthLineCount - 1);
+	for(int DepthLineIndex = (DepthLineCount - 1);
 		DepthLineIndex >= 0;
 		--DepthLineIndex)
 	{
-		if(WorldState->DepthLines[DepthLineIndex].Depth <= BasePDepth)
+		if(DepthLines[DepthLineIndex].Depth <= BasePDepth)
 		{
 			BasePDepthLineIndex = DepthLineIndex;
 			break;
@@ -134,8 +148,8 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	//NOTE(moritz): Lerp the sprite scaling between the base depth line and the next closer one. 
 	//Use depth to determine t.
 	//TODO(moritz): Handle out of bounds!
-	float Depth0 = WorldState->DepthLines[BasePDepthLineIndex].Depth;
-	float Depth1 = WorldState->DepthLines[BasePDepthLineIndex + 1].Depth;
+	float Depth0 = DepthLines[BasePDepthLineIndex].Depth;
+	float Depth1 = DepthLines[BasePDepthLineIndex + 1].Depth;
 	
 	float DeltaDepth = Depth1     - Depth0;
 	float BasePDelta = BasePDepth - Depth0;
@@ -143,8 +157,8 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	float t = BasePDelta/DeltaDepth;
 	
 	//TODO(moritz): Handle out of bounds!
-	float Scale0 = WorldState->DepthLines[BasePDepthLineIndex].Scale;
-	float Scale1 = WorldState->DepthLines[BasePDepthLineIndex + 1].Scale;
+	float Scale0 = DepthLines[BasePDepthLineIndex].Scale;
+	float Scale1 = DepthLines[BasePDepthLineIndex + 1].Scale;
 	
 	float DepthScale = Scale0 + t*(Scale1 - Scale0);
 	
@@ -154,21 +168,21 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	//NOTE(moritz): Determine screen position of BaseP
 	float BasePScreenY = fScreenHeight;
 	if(BasePDepth != 0.0f)
-		BasePScreenY = (float)WorldState->DepthLineCount + (WorldState->CameraHeight/BasePDepth);
+		BasePScreenY = (float)DepthLineCount + (CameraHeight/BasePDepth);
 	
 	//NOTE(moritz):Clamp to screen coords to avoid some invalid memory access bug
 	BasePScreenY = Clamp(0.0f, BasePScreenY, fScreenHeight);
 	
 	//NOTE(moritz): Where the sprite will be at the bottom of the Road
-	//float BasePOffsetX = WorldState->BaseRoadHalfWidth + 300.0f + 0.5f*((float)Texture.width);
-	float BasePOffsetX = 3.0f*WorldState->BaseRoadHalfWidth + 0.5f*((float)Texture.width);
+	//float BasePOffsetX = BaseRoadHalfWidth + 300.0f + 0.5f*((float)Texture.width);
+	float BasePOffsetX = 3.0f*BaseRoadHalfWidth + 0.5f*((float)Texture.width);
 	
 	//NOTE(moritz): Some more lerping for the X part of BaseP. Taking into account curviness, angle of road and all that nonesense...
-	float fDepthLineCount = (float)WorldState->DepthLineCount;
-	float AngleOfRoad = WorldState->fRoadBaseOffsetX/fDepthLineCount;
+	float fDepthLineCount = (float)DepthLineCount;
+	float AngleOfRoad = fRoadBaseOffsetX/fDepthLineCount;
 	
-	float X0 = WorldState->fCurveStartX + Curviness*( (float)(BasePDepthLineIndex*(BasePDepthLineIndex + 1))*0.5f ) + BasePOffsetX*DepthScale;
-	float X1 = WorldState->fCurveStartX + Curviness*( (float)((BasePDepthLineIndex + 1)*(BasePDepthLineIndex + 1 + 1))*0.5f ) + BasePOffsetX*DepthScale;
+	float X0 = fCurveStartX + Curviness*( (float)(BasePDepthLineIndex*(BasePDepthLineIndex + 1))*0.5f ) + BasePOffsetX*DepthScale;
+	float X1 = fCurveStartX + Curviness*( (float)((BasePDepthLineIndex + 1)*(BasePDepthLineIndex + 1 + 1))*0.5f ) + BasePOffsetX*DepthScale;
 	
 	Vector2 BaseP = {};
 	BaseP.x = X0 + t*(X1 - X0) - AngleOfRoad*(fDepthLineCount - BasePScreenY);
@@ -189,6 +203,7 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	
 	DrawTextureEx(Texture, SpriteDrawP, 0.0f, DepthScale*15.0f*ScaleInT, WHITE);
 }
+#endif
 
 int
 main()
