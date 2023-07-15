@@ -24,7 +24,8 @@ if (NOT raylib_FOUND) # If there's none, fetch and build raylib
 endif()
 
 # Our Project
-file (GLOB source_files "code/*.cpp")  
+#file (GLOB source_files "code/*.cpp")  
+set(source_files "code/main.cpp")
 
 add_executable(${PROJECT_NAME}  ${source_files})
 
