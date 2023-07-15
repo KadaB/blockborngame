@@ -36,6 +36,10 @@ target_link_libraries(${PROJECT_NAME} raylib)
 if ("${PLATFORM}" STREQUAL "Web")
     # Tell Emscripten to build an example.html file.
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".html")
+    #set(CMAKE_EXECUTABLE_SUFFIX ".html")
+
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s USE_GLFW=3 -s ASSERTIONS=1 -s WASM=1 -s ASYNCIFY")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s USE_GLFW=3 -s ASSERTIONS=1 -s WASM=1 -s ASYNCIFY")
 endif()
 
 # Checks if OSX and links appropriate frameworks (Only required on MacOS)
