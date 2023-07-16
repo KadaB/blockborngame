@@ -42,11 +42,29 @@ Clamp(float Min, float Value, float Max)
 	return Value;
 }
 
+float
+Max(float A, float B)
+{
+	if(A > B)
+		return A;
+	
+	return B;
+}
+
+float
+Min(float A, float B)
+{
+	if(A < B)
+		return A;
+	
+	return B;
+}
+
 void
 DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount,
 		 road_segment BottomSegment, road_segment NextSegment)
 {
-	float dX = 0.0f;
+	float dX = 0.0f; //NOTE(moritz): Per line curve amount. ddX is per segment curve amount
 	float fCurrentCenterX     = fScreenWidth*0.5f + 0.5f; //NOTE(moritz): Road center line 
 	float BaseRoadHalfWidth   = fScreenWidth*0.5f;
 	float BaseStripeHalfWidth = 10.0f;
@@ -56,6 +74,7 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		Offset -= 8.0f;
 	
 	road_segment CurrentSegment = BottomSegment;
+	Color DebugColor = RED;
 	
 	for(int DepthLineIndex = 0;
 		DepthLineIndex < DepthLineCount;
@@ -67,7 +86,10 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		float fStripeWidth = BaseStripeHalfWidth*DepthLines[DepthLineIndex].Scale;
 		
 		if(fDepthLineIndex > NextSegment.Position)
+		{
 			CurrentSegment = NextSegment;
+			DebugColor = BLUE;
+		}
 		
 		dX += CurrentSegment.ddX;
 		fCurrentCenterX += dX;
@@ -92,14 +114,25 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		Vector2 RoadStart = {fCurrentCenterX - fRoadWidth, fScreenHeight - fDepthLineIndex - 0.5f};
 		Vector2 RoadEnd   = {fCurrentCenterX + fRoadWidth, fScreenHeight - fDepthLineIndex - 0.5f};
 		
+#if 1
+		//NOTE(moritz): Bottom segment / next segment vis
+		DrawLineV(RoadStart, RoadEnd, DebugColor);
+#endif
+		
+#if 0
+		//NOTE(moritz): Curvature debug vis
 		if(CurrentSegment.ddX > 0.0f)
 			DrawLineV(RoadStart, RoadEnd, RED);
 		else if(CurrentSegment.ddX < 0.0f)
 			DrawLineV(RoadStart, RoadEnd, YELLOW);
 		else
 			DrawLineV(RoadStart, RoadEnd, BLUE);
+#endif
 		
-		//DrawLineV(RoadStart, RoadEnd, RoadColor);
+#if 0
+		//NOTE(moritz): Regular drawing
+		DrawLineV(RoadStart, RoadEnd, RoadColor);
+#endif
 		
 		//NOTE(moritz): Draw road stripes
 		if(fmod(RoadWorldZ + 0.5f, 2.0f) > 1.0f) //TODO(moritz): 0.5f -> is stripe offset
@@ -111,13 +144,18 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	}
 }
 
-#if 0
+#if 1
 void
 DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
-			  float Curviness, int ScreenWidth, int ScreenHeight, float fScreenHeight, depth_line *DepthLines,
-			  int DepthLineCount, bool DebugText = false)
+			  /*float Curviness, */float fScreenWidth, float fScreenHeight, depth_line *DepthLines,
+			  int DepthLineCount, float CameraHeight, road_segment BottomSegment,
+			  road_segment NextSegment, bool DebugText = false)
 {
-	//Assert(Distance <= MaxDistance);
+	//float dX = 0.0f;
+	float fCurrentCenterX     = fScreenWidth*0.5f + 0.5f; //NOTE(moritz): Road center line 
+	float BaseRoadHalfWidth   = fScreenWidth*0.5f;
+	float BaseStripeHalfWidth = 10.0f;
+	
 	
 	//NOTE(moirtz): Test for "scaling in" distant billboards instead of popping them in...
 	//float ScaleInDistance = 10.0f;
@@ -126,7 +164,7 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	ScaleInT = Clamp(0.0f, ScaleInT, 1.0f);
 	
 	if(DebugText)
-		DrawText(TextFormat("TreeScaleInT: %f", ScaleInT), 20, 10, 10, RED);
+		DrawText(TextFormat("TreeScaleInT: %f", ScaleInT), 20, 20, 10, RED);
 	
 	//float MaxDistance = (float)DepthLineCount;
 	float OneOverMaxDistance = 1.0f/MaxDistance;
@@ -163,7 +201,7 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	float DepthScale = Scale0 + t*(Scale1 - Scale0);
 	
 	if(DebugText)
-		DrawText(TextFormat("TreeDepthScale: %f", DepthScale), 20, 20, 10, RED);
+		DrawText(TextFormat("TreeDepthScale: %f", DepthScale), 20, 30, 10, RED);
 	
 	//NOTE(moritz): Determine screen position of BaseP
 	float BasePScreenY = fScreenHeight;
@@ -179,17 +217,64 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	
 	//NOTE(moritz): Some more lerping for the X part of BaseP. Taking into account curviness, angle of road and all that nonesense...
 	float fDepthLineCount = (float)DepthLineCount;
-	float AngleOfRoad = fRoadBaseOffsetX/fDepthLineCount;
+	float AngleOfRoad = 1.0f;//fRoadBaseOffsetX/fDepthLineCount;
 	
-	float X0 = fCurveStartX + Curviness*( (float)(BasePDepthLineIndex*(BasePDepthLineIndex + 1))*0.5f ) + BasePOffsetX*DepthScale;
-	float X1 = fCurveStartX + Curviness*( (float)((BasePDepthLineIndex + 1)*(BasePDepthLineIndex + 1 + 1))*0.5f ) + BasePOffsetX*DepthScale;
+	//TODO(moritz): Figure out which road segment we are in
+	//Used closed formula to determine 
+	
+	float fBasePDepthLineIndex = (float)BasePDepthLineIndex;
+	
+	road_segment CurrentSegment = BottomSegment;
+	
+	float fCurveStartX = fCurrentCenterX;
+	
+#if 1
+	
+	//if(Distance > NextSegment.Position)
+	if(fBasePDepthLineIndex > NextSegment.Position)
+	{
+		CurrentSegment = NextSegment;
+		
+		//TODO(moritz): I suspect that this is wrong!
+		//This should be more like
+		fCurveStartX += BottomSegment.ddX*( (NextSegment.Position*(NextSegment.Position + 1.0f))*0.5f );
+		//fCurveStartX  += BottomSegment.EndRelPX; 
+		
+		if(DebugText)
+			DrawText("In Next segment!", 20, 40, 10, RED);
+	}
+	else
+	{
+		if(DebugText)
+			DrawText("In Bottom segment!", 20, 40, 10, RED);
+	}
+#endif
+	
+	
+	
+	float BillboardCurveAt = Max(fBasePDepthLineIndex, CurrentSegment.Position) - Min(CurrentSegment.Position, fBasePDepthLineIndex);
+	//float BillboardCurveAt = CurrentSegment.Position - fBasePDepthLineIndex;
+	
+	//float BillboardCurveAt = Distance - CurrentSegment.Position;
+	
+	if(DebugText)
+		DrawText(TextFormat("CurveAt: %f", BillboardCurveAt), 20, 50, 10, RED);
+	
+#if 1
+	float X0 = fCurveStartX + CurrentSegment.ddX*( (BillboardCurveAt*(BillboardCurveAt + 1.0f))*0.5f ) + BasePOffsetX*DepthScale;
+	float X1 = fCurveStartX + CurrentSegment.ddX*( ((BillboardCurveAt + 1)*(BillboardCurveAt + 1.0f + 1.0f))*0.5f ) + BasePOffsetX*DepthScale;
+#else
+	float X0 = fCurveStartX + CurrentSegment.ddX*( (float)(BasePDepthLineIndex*(BasePDepthLineIndex + 1))*0.5f ) + BasePOffsetX*DepthScale;
+	float X1 = fCurveStartX + CurrentSegment.ddX*( (float)((BasePDepthLineIndex + 1)*(BasePDepthLineIndex + 1 + 1))*0.5f ) + BasePOffsetX*DepthScale;
+#endif
+	
+	Vector2 TestSize = {5.0f, 5.0f};
 	
 	Vector2 BaseP = {};
 	BaseP.x = X0 + t*(X1 - X0) - AngleOfRoad*(fDepthLineCount - BasePScreenY);
 	BaseP.y = BasePScreenY;
 	
 #if 1
-	Vector2 TestSize = {5.0f, 5.0f};
 	DrawRectangleV(BaseP, TestSize, RED);
 #endif
 	
@@ -204,6 +289,7 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	DrawTextureEx(Texture, SpriteDrawP, 0.0f, DepthScale*15.0f*ScaleInT, WHITE);
 }
 #endif
+
 
 int
 main()
@@ -220,8 +306,45 @@ main()
 	
 	bool AudioIsInitialised = false;
 	
+	//TODO(moritz): Do we want to do this or do the d7Samura fatpixel filtering thing?
+	//Does it only work for texture sampling? Could be adapted for drawing quads?
+	//TODO(moritz): What about the timothy lottes CRT filter thing?
+	SetConfigFlags(FLAG_MSAA_4X_HINT);
 	InitWindow(ScreenWidth, ScreenHeight, "raylib");
 	SetTargetFPS(60);
+	
+	//---------------------------------------------------------
+	
+	//NOTE(moritz): Load textures
+	Texture2D TreeTexture = LoadTexture("tree.png");
+	SetTextureFilter(TreeTexture, TEXTURE_FILTER_BILINEAR);
+	
+	/*
+TODO(moritz): If we want to use mipmaps for our
+billboards (I think we should), then it seems like
+we can't just generate them at startup... This only
+works for native builds of the game. Not for wasm builds...
+So the mips need to get generated offline.
+And then the game loads in the textures with mipmaps included.
+*/
+#if 0
+	//NOTE(moritz): Load textures
+	Texture2D TreeTexture = LoadTexture("tree.png");
+	//SetTextureFilter(TreeTexture, TEXTURE_FILTER_BILINEAR);
+	GenTextureMipmaps(&TreeTexture);
+	SetTextureFilter(TreeTexture, TEXTURE_FILTER_TRILINEAR);
+#endif
+	
+#if 0
+	//NOTE(moritz): Alternative attempt at texture loading,
+	//since GenTextureMipmaps seems to fail for wasm builds
+	Image TreeImage = LoadImage("tree.png");
+	ImageMipmaps(&TreeImage);
+	Texture2D TreeTexture = LoadTextureFromImage(TreeImage);
+	SetTextureFilter(TreeTexture, TEXTURE_FILTER_TRILINEAR);
+	SetTextureWrap(TreeTexture, TEXTURE_WRAP_CLAMP);
+#endif
+	
 	
 	//---------------------------------------------------------
 	
@@ -262,6 +385,9 @@ main()
 	
 	//---------------------------------------------------------
 	
+	float TreeDistance = MaxDistance;
+	//road_segment TreeSegment = GetSegmentAtDistance(TreeDistance, BottomSegment, NextSegment);
+	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
 	while(!WindowShouldClose())
@@ -289,10 +415,13 @@ main()
 		//NOTE(moritz): Update segment position of NextSegment
 		NextSegment.Position -= dPlayerP;
 		
-		if(NextSegment.Position < 0.0f)
+		bool NewBottomSegment = false;
+		if(NextSegment.Position <= 0.0f)
 		{
 			BottomSegment = NextSegment;
 			NextSegment.Position = MaxDistance;
+			
+			BottomSegment.Position = 0.0f;
 			
 			int Rand = (rand() % 2);
 			
@@ -300,10 +429,12 @@ main()
 				NextSegment.EndRelPX =  50.0f;
 			else
 				NextSegment.EndRelPX = -50.0f;
+			
+			NewBottomSegment = true;
 		}
 		
 		//NOTE(moritz): Update ddX?
-		//TODO(moritz): Maybe only do this, when a new segment enters
+		//TODO(moritz): Maybe only do this when a new segment enters
 		{
 			float CurveStartX = fScreenCenterX;
 			float CurveEndX   = fScreenCenterX + BottomSegment.EndRelPX;
@@ -322,13 +453,59 @@ main()
 			NextSegment.ddX = 2.0f*(CurveEndX - CurveStartX)/((DeltaDepthMapP*(DeltaDepthMapP + 1.0f)));
 		}
 		
+		//NOTE(moritz): Update billboard positions
+		TreeDistance -= dPlayerP;
+		if((TreeDistance < 0.0f)/* && NewBottomSegment*/) //TODO(moritz): poor man's way of syncing tree spawn with segment swap to avoid weird bug
+			TreeDistance = MaxDistance + 1.0f;
+		
 		BeginDrawing();
 		
 		ClearBackground(WHITE);
-		DrawFPS(10, 10);
+		//DrawFPS(10, 10);
 		
 		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
 				 BottomSegment, NextSegment);
+		
+#if 0
+		if(TreeDistance > 0.0f)
+			DrawBillboard(TreeTexture, TreeDistance, MaxDistance,
+						  fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
+						  CameraHeight, 
+						  BottomSegment, NextSegment, true);
+#endif
+		
+		//NOTE(moritz): Debug stuff
+		float TestX = (float)fScreenWidth*0.5f + 0.5f;
+		
+#if 0
+		float TestdX = 0.0f;
+		road_segment CurrentSegment = BottomSegment;
+		for(int DepthLineIndex = 0;
+			DepthLineIndex < DepthLineCount;
+			++DepthLineIndex)
+		{
+			float fDepthLineIndex = (float)DepthLineIndex;
+			
+			if(fDepthLineIndex > NextSegment.Position)
+			{
+				CurrentSegment = NextSegment;
+			}
+			
+			TestdX += CurrentSegment.ddX;
+			TestX += TestdX;
+		}
+#else
+		TestX += BottomSegment.ddX*( (NextSegment.Position*(NextSegment.Position + 1.0f))*0.5f );
+		float TestXAt = fDepthLineCount - NextSegment.Position;
+		TestX += NextSegment.ddX*( (TestXAt*(TestXAt + 1.0f))*0.5f );
+#endif
+		
+		Vector2 TestSize = {5.0f, 5.0f};
+		
+		Vector2 TestP = {};
+		TestP.x = TestX;
+		TestP.y = fDepthLineCount;
+		DrawRectangleV(TestP, TestSize, PINK);
 		
 		//---------------------------------------------------------
 		
