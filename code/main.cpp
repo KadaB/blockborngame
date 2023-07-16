@@ -475,9 +475,9 @@ And then the game loads in the textures with mipmaps included.
 #endif
 		
 		//NOTE(moritz): Debug stuff
-		float TestX = (float)fScreenWidth*0.5f + 0.5f;
+		float TestX = fScreenWidth*0.5f + 0.5f;
 		
-#if 0
+#if 1
 		float TestdX = 0.0f;
 		road_segment CurrentSegment = BottomSegment;
 		for(int DepthLineIndex = 0;
@@ -494,10 +494,12 @@ And then the game loads in the textures with mipmaps included.
 			TestdX += CurrentSegment.ddX;
 			TestX += TestdX;
 		}
-#else
-		TestX += BottomSegment.ddX*( (NextSegment.Position*(NextSegment.Position + 1.0f))*0.5f );
+		
+		float OtherTestX = fScreenWidth*0.5f + 0.5f;
+		
+		OtherTestX += BottomSegment.ddX*( (NextSegment.Position*(NextSegment.Position + 1.0f))*0.5f );
 		float TestXAt = fDepthLineCount - NextSegment.Position;
-		TestX += NextSegment.ddX*( (TestXAt*(TestXAt + 1.0f))*0.5f );
+		OtherTestX += NextSegment.ddX*( (TestXAt*(TestXAt + 1.0f))*0.5f );
 #endif
 		
 		Vector2 TestSize = {5.0f, 5.0f};
@@ -506,6 +508,11 @@ And then the game loads in the textures with mipmaps included.
 		TestP.x = TestX;
 		TestP.y = fDepthLineCount;
 		DrawRectangleV(TestP, TestSize, PINK);
+		
+		Vector2 OtherTestP = {};
+		TestP.x = OtherTestX;
+		TestP.y = fDepthLineCount;
+		DrawRectangleV(TestP, TestSize, PURPLE);
 		
 		//---------------------------------------------------------
 		
