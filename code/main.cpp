@@ -5,6 +5,8 @@
 
 #define ROAD_SEGMENT_TYPE_COUNT 2
 
+#define U32Max ((unsigned int) - 1)
+
 struct depth_line
 {
 	float Depth;
@@ -13,10 +15,26 @@ struct depth_line
 
 struct road_segment
 {
-	float EndRelPX;
-	float Position;
+	float Length;
 	
-	float ddX;
+	Vector2 Start;
+	Vector2 C0;
+	Vector2 C1;
+	Vector2 End;
+	
+	road_segment *Next;
+};
+
+struct road_pool
+{
+	road_segment *FirstFreeRoad;
+	road_pool *Next;
+};
+
+struct list
+{
+	road_segment *First;
+	road_segment *Last;
 };
 
 void
@@ -28,6 +46,99 @@ ZeroSize(void *InitDest, int Size)
 	{
 		*Dest++ = 0;
 	}
+}
+
+road_segment *
+AllocateRoadSegment(road_pool *Pool)
+{
+	if(!Pool->FirstFreeRoad)
+	{
+		int RoadsPerPool = 32;
+		road_segment *NewSegments = (road_segment *)malloc(RoadsPerPool*sizeof(road_segment));
+		ZeroSize(NewSegments, RoadsPerPool*sizeof(road_segment));
+		if(NewSegments)
+		{
+			for(int SegmentIndex = 0;
+				SegmentIndex < (RoadsPerPool - 1);
+				++SegmentIndex)
+			{
+				NewSegments[SegmentIndex].Next = &NewSegments[SegmentIndex + 1];
+			}
+			
+			NewSegments[RoadsPerPool - 1].Next = 0;
+		}
+		
+		Pool->FirstFreeRoad = NewSegments;
+	}
+	
+	road_segment *Result = Pool->FirstFreeRoad;
+	Pool->FirstFreeRoad = Result->Next;
+	
+	Result->Next = 0;
+	return(Result);
+}
+
+road_segment *
+DeleteHeadSegment(list *ActiveRoadList, road_pool *Pool)
+{
+	if(ActiveRoadList->First)
+	{
+		road_segment *NewHead = ActiveRoadList->First->Next;
+		
+		ActiveRoadList->First->Next = Pool->FirstFreeRoad;
+		Pool->FirstFreeRoad = ActiveRoadList->First;
+		
+		ActiveRoadList->First = NewHead;
+		
+		return(ActiveRoadList->First);
+	}
+	
+	return(0);
+}
+
+void
+Append(list *ActiveRoadList, road_segment *Segment)
+{
+	ActiveRoadList->Last = (ActiveRoadList->Last ? ActiveRoadList->Last->Next : ActiveRoadList->First) = Segment;
+}
+
+inline Vector2
+operator*(Vector2 A, float Float)
+{
+	Vector2 Result;
+	
+	Result.x = A.x*Float;
+	Result.y = A.y*Float;
+	
+	return(Result);
+}
+
+inline Vector2
+operator*(float Float, Vector2 A)
+{
+	return(A*Float);
+}
+
+inline Vector2
+operator+(Vector2 A, Vector2 B)
+{
+	Vector2 Result;
+	
+	Result.x = A.x + B.x;
+	Result.y = A.y + B.y;
+	
+	return(Result);
+}
+
+inline Vector2
+operator-(Vector2 A, Vector2 B)
+{
+	Vector2 Result;
+	
+	Result.x = A.x - B.x;
+	Result.y = A.y - B.y;
+	
+	return(Result);
 }
 
 float
@@ -60,20 +171,114 @@ Min(float A, float B)
 	return B;
 }
 
+float
+Lerp(float A, float t, float B)
+{
+	float Result = (1.0f - t)*A + t*B;
+	return(Result);
+}
+
+Vector2
+Lerp(Vector2 A, float t, Vector2 B)
+{
+	Vector2 Result = (1.0f - t)*A + t*B;
+	return(Result);
+}
+
+float
+Bezier2(float Start, float End, float Control, float t)
+{
+	float P0 = Lerp(Start,   t, Control);
+	float P1 = Lerp(Control, t, End);
+	
+	float Result = Lerp(P0, t, P1);
+	return(Result);
+}
+
+//Vector2
+float
+Bezier3(Vector2 A, Vector2 B, Vector2 C, Vector2 D, float t)
+{
+	//NOTE(moritz): A: start, D: end
+	//B: control0
+	//C: control1
+	
+	Vector2 P0 = Lerp(A, t, B);
+	Vector2 P1 = Lerp(B, t, C);
+	Vector2 P2 = Lerp(C, t, D);
+	
+	Vector2 P01 = Lerp(P0, t, P1);
+	Vector2 P12 = Lerp(P1, t, P2);
+	
+	Vector2 P0112 = Lerp(P01, t, P12);
+	
+	//TODO(moritz): ?
+	//return(P0112);
+	return(P0112.x);
+}
+
+//Vector2
+float
+Bezier3(road_segment RoadSegment, float t)
+{
+	return(Bezier3(RoadSegment.Start, RoadSegment.C0,
+				   RoadSegment.C1, RoadSegment.End, t));
+}
+
+struct random_series
+{
+	unsigned int State;
+};
+
+unsigned int 
+XORShift32(random_series *Series) 
+{
+	unsigned int X = Series->State;
+	X ^= X << 13;
+	X ^= X >> 17;
+	X ^= X << 5;
+	
+	Series->State = X;
+	
+	return(X);
+}
+
+float
+RandomUnilateral(random_series *Series)
+{
+	float Result = ((float)XORShift32(Series)/(float)U32Max);
+	return(Result);
+}
+
+float
+RandomBilateral(random_series *Series)
+{
+	float Result = -1.0f + 2.0f*(RandomUnilateral(Series));
+	return(Result);
+}
+
 void
 DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount,
-		 road_segment BottomSegment, road_segment NextSegment)
+		 list *ActiveRoadList, road_pool *Pool, random_series *RoadEntropy)
 {
 	float dX = 0.0f; //NOTE(moritz): Per line curve amount. ddX is per segment curve amount
 	float fCurrentCenterX     = fScreenWidth*0.5f + 0.5f; //NOTE(moritz): Road center line 
 	float BaseRoadHalfWidth   = fScreenWidth*0.5f;
 	float BaseStripeHalfWidth = 10.0f;
 	
+	float fDepthLineCount = (float)DepthLineCount;
+	
 	float Offset = PlayerP;
 	if(Offset > 8.0f)
 		Offset -= 8.0f;
 	
-	road_segment CurrentSegment = BottomSegment;
+	road_segment *CurrentSegment = ActiveRoadList->First;
+	float BezierTOffset = 0.0f;
+	float fSegmentAt = 0.0f;
+	
+	if(CurrentSegment->Start.y < 0.0f)
+		BezierTOffset = (float)fabs(CurrentSegment->Start.y);
+	
 	Color DebugColor = RED;
 	
 	for(int DepthLineIndex = 0;
@@ -81,18 +286,69 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		++DepthLineIndex)
 	{
 		float fDepthLineIndex = (float)DepthLineIndex;
+		fSegmentAt += 1.0f;
 		
 		float fRoadWidth   = BaseRoadHalfWidth*DepthLines[DepthLineIndex].Scale;
 		float fStripeWidth = BaseStripeHalfWidth*DepthLines[DepthLineIndex].Scale;
 		
-		if(fDepthLineIndex > NextSegment.Position)
+		//NOTE(moritz): Basic bezier test
+		//float BezierT = fDepthLineIndex/fDepthLineCount;
+		float BezierT = fSegmentAt/CurrentSegment->Length;
+		BezierT += BezierTOffset;
+		
+		//BezierT = Clamp(0.0f, BezierT, 1.0f);
+		if(BezierT > 1.0f)
 		{
-			CurrentSegment = NextSegment;
 			DebugColor = BLUE;
+			
+			fSegmentAt -= CurrentSegment->Length;
+			//Get next segment..
+			BezierT -= 1.0f;
+			
+			if(CurrentSegment->Next)
+				CurrentSegment = CurrentSegment->Next;
+			else
+			{
+				road_segment *NewSegment = AllocateRoadSegment(Pool);
+				NewSegment->Length = MaxDistance;//30.0f + 50.0f*RandomUnilateral(RoadEntropy);
+				
+				NewSegment->Start = CurrentSegment->End;
+				Vector2 Diff = NewSegment->Start - CurrentSegment->C1;
+				NewSegment->C0 = NewSegment->Start + Diff;
+				
+				NewSegment->C1.x = .2f*RandomBilateral(RoadEntropy);
+				NewSegment->C1.y = NewSegment->C0.y + 0.1f + RandomUnilateral(RoadEntropy);
+				
+				NewSegment->End.x = .2f*RandomBilateral(RoadEntropy);
+				NewSegment->End.y = NewSegment->C1.y + 0.1f + RandomUnilateral(RoadEntropy);
+				
+				float OneOverYRange = 1.0f/(NewSegment->End.y - NewSegment->Start.y);
+				float YOffset = NewSegment->Start.y;
+				
+				//NOTE(moritz): Need to renormalise by End.y
+				NewSegment->Start.y -= YOffset;
+				NewSegment->Start.y *= OneOverYRange;
+				NewSegment->Start.y += YOffset;
+				
+				NewSegment->C0.y -= YOffset;
+				NewSegment->C0.y *= OneOverYRange;
+				NewSegment->C0.y += YOffset;
+				
+				NewSegment->C1.y -= YOffset;
+				NewSegment->C1.y *= OneOverYRange;
+				NewSegment->C1.y += YOffset;
+				
+				NewSegment->End.y -= YOffset;
+				NewSegment->End.y *= OneOverYRange;
+				NewSegment->End.y += YOffset;
+				
+				Append(ActiveRoadList, NewSegment);
+				
+				CurrentSegment = NewSegment;
+			}
 		}
 		
-		dX += CurrentSegment.ddX;
-		fCurrentCenterX += dX;
+		fCurrentCenterX = 0.5f*fScreenWidth + Bezier3(*CurrentSegment, BezierT)*0.5f*fScreenWidth;
 		
 		float RoadWorldZ = DepthLines[DepthLineIndex].Depth*MaxDistance + Offset;
 		
@@ -144,7 +400,7 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	}
 }
 
-#if 1
+#if 0
 void
 DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 			  /*float Curviness, */float fScreenWidth, float fScreenHeight, depth_line *DepthLines,
@@ -228,7 +484,7 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	
 	float fCurveStartX = fCurrentCenterX;
 	
-#if 1
+#if 0
 	
 	//if(Distance > NextSegment.Position)
 	if(fBasePDepthLineIndex > NextSegment.Position)
@@ -378,10 +634,32 @@ And then the game loads in the textures with mipmaps included.
 	float PlayerP     = 0.0f;
 	
 	//---------------------------------------------------------
-	road_segment NextSegment = {};
-	NextSegment.Position = 50.0f;
 	
-	road_segment BottomSegment = {};
+	random_series RoadEntropy = {420};
+	road_pool RoadPool      = {};
+	list ActiveRoadList = {};
+	
+	road_segment *InitialRoadSegment = AllocateRoadSegment(&RoadPool);
+	
+	InitialRoadSegment->Length  = MaxDistance;//20.0f + RandomUnilateral(&RoadEntropy)*50.0f;
+	InitialRoadSegment->Start.x = 0.0f;
+	InitialRoadSegment->Start.y = 0.0f;
+	InitialRoadSegment->C0.x    = .2f*RandomBilateral(&RoadEntropy);
+	InitialRoadSegment->C0.y    = 0.1f + RandomUnilateral(&RoadEntropy);
+	InitialRoadSegment->C1.x    = .2f*RandomBilateral(&RoadEntropy);
+	InitialRoadSegment->C1.y    = InitialRoadSegment->C0.y + 0.1f + RandomUnilateral(&RoadEntropy);
+	InitialRoadSegment->End.x   = .2f*RandomBilateral(&RoadEntropy);
+	InitialRoadSegment->End.y   = InitialRoadSegment->C1.y + 0.1f + RandomUnilateral(&RoadEntropy);
+	
+	float OneOverEndY = 1.0f/InitialRoadSegment->End.y;
+	
+	//NOTE(moritz): Need to renormalise by End.y
+	InitialRoadSegment->Start.y *= OneOverEndY;
+	InitialRoadSegment->C0.y    *= OneOverEndY;
+	InitialRoadSegment->C1.y    *= OneOverEndY;
+	InitialRoadSegment->End.y   *= OneOverEndY;
+	
+	Append(&ActiveRoadList, InitialRoadSegment);
 	
 	//---------------------------------------------------------
 	
@@ -412,46 +690,30 @@ And then the game loads in the textures with mipmaps included.
 		//TODO(moritz): Floating point precision for PlayerP
 		PlayerP += dPlayerP;
 		
-		//NOTE(moritz): Update segment position of NextSegment
-		NextSegment.Position -= dPlayerP;
-		
-		bool NewBottomSegment = false;
-		if(NextSegment.Position <= 0.0f)
+#if 1
+		//NOTE(moritz): update road segment position
+		for(road_segment *Segment = ActiveRoadList.First;
+			Segment;
+			Segment = Segment->Next)
 		{
-			BottomSegment = NextSegment;
-			NextSegment.Position = MaxDistance;
+			float RoadDelta = dPlayerP/MaxDistance;
+			//float RoadDelta = dPlayerP;
 			
-			BottomSegment.Position = 0.0f;
+			RoadDelta *= 4.0f;
 			
-			int Rand = (rand() % 2);
+			Segment->Start.y -= RoadDelta;
+			Segment->C0.y    -= RoadDelta;
+			Segment->C1.y    -= RoadDelta;
+			Segment->End.y   -= RoadDelta;
 			
-			if(Rand == 0)
-				NextSegment.EndRelPX =  50.0f;
-			else
-				NextSegment.EndRelPX = -50.0f;
-			
-			NewBottomSegment = true;
+			if(Segment->End.y < 0.0f)
+			{
+				//Assert(Segment == ActiveRoadList.First):
+				Segment = DeleteHeadSegment(&ActiveRoadList, &RoadPool);
+			}
 		}
+#endif
 		
-		//NOTE(moritz): Update ddX?
-		//TODO(moritz): Maybe only do this when a new segment enters
-		{
-			float CurveStartX = fScreenCenterX;
-			float CurveEndX   = fScreenCenterX + BottomSegment.EndRelPX;
-			
-			float DeltaDepthMapP = fDepthLineCount;
-			
-			BottomSegment.ddX = 2.0f*(CurveEndX - CurveStartX)/((DeltaDepthMapP*(DeltaDepthMapP + 1.0f)));
-		}
-		
-		{
-			float CurveStartX = 0.0f;
-			float CurveEndX   = NextSegment.EndRelPX;
-			
-			float DeltaDepthMapP = fDepthLineCount;
-			
-			NextSegment.ddX = 2.0f*(CurveEndX - CurveStartX)/((DeltaDepthMapP*(DeltaDepthMapP + 1.0f)));
-		}
 		
 		//NOTE(moritz): Update billboard positions
 		TreeDistance -= dPlayerP;
@@ -464,7 +726,7 @@ And then the game loads in the textures with mipmaps included.
 		//DrawFPS(10, 10);
 		
 		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-				 BottomSegment, NextSegment);
+				 /*BottomSegment, NextSegment*/&ActiveRoadList, &RoadPool, &RoadEntropy);
 		
 #if 0
 		if(TreeDistance > 0.0f)
@@ -477,7 +739,7 @@ And then the game loads in the textures with mipmaps included.
 		//NOTE(moritz): Debug stuff
 		float TestX = fScreenWidth*0.5f + 0.5f;
 		
-#if 1
+#if 0
 		float TestdX = 0.0f;
 		road_segment CurrentSegment = BottomSegment;
 		for(int DepthLineIndex = 0;
@@ -502,6 +764,7 @@ And then the game loads in the textures with mipmaps included.
 		OtherTestX += NextSegment.ddX*( (TestXAt*(TestXAt + 1.0f))*0.5f );
 #endif
 		
+#if 0
 		Vector2 TestSize = {5.0f, 5.0f};
 		
 		Vector2 TestP = {};
@@ -513,6 +776,8 @@ And then the game loads in the textures with mipmaps included.
 		TestP.x = OtherTestX;
 		TestP.y = fDepthLineCount;
 		DrawRectangleV(TestP, TestSize, PURPLE);
+		
+#endif
 		
 		//---------------------------------------------------------
 		
