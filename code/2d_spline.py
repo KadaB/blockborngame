@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from math import factorial as fac
 from math import pow
+import math
 import numpy as np
 from functools import reduce
 from matplotlib.backend_bases import MouseButton
@@ -9,27 +10,47 @@ import matplotlib as mpl
 def main():
   steps=255
   # one dimensional bezier
-  controls=[[ 0, 0.],
-          [ 0, .7],
-          [-.1, 1],
-          [ .2, 1.]]
-  doPlot(controls)
+  controls=[ [0,0], [1,2], [3,1], [3,-1], [3,-2], [4,-3], [5,-2], [5,0], [6,1], [7,1], [8,0], [8,-1], [9,-1], [10,0], [11,0],[12,-1], [11.5,-2.5], [10,-3], [9,-2], [10,0] ]
+  doPlot(controls, point_from_bspline)
 
 def lerp(a, b, t):
     return np.add(np.multiply(a, 1-t), np.multiply(b, t))
 
-def bezier3deg(A, B, C, D, t):
-  p0 = lerp(A, B, t)
-  p1 = lerp(B, C, t)
-  p2 = lerp(C, D, t)
+def bezier2(A, B, C, t):
+    p0 = lerp(A, B, t)
+    p1 = lerp(B, C, t)
+    return lerp(p0, p1, t)
 
-  p01 = lerp(p0, p1, t)
-  p12 = lerp(p1, p2, t)
+# fsplit(0, 4) -> (0, 0), fsplit(1, 4) -> (1, 3)
+def fsplit(value, count):
+  if(value < 0 or count == 0):
+    return (0, 0)
+  t = value * count
+  int_num = math.floor(t)
+  decimal = t - int_num
+  if(value > 1 or int_num == count):
+    return (1, count-1)
+  return (decimal, int_num)
 
-  p0112 = lerp(p01, p12, t)
-  return p0112
+# use interpolated points as start and end
+# and path points in between as control points
+def point_from_bspline(points, t):
+    bezier_number = len(points) - 2;
 
-def doPlot(controls, steps = 100):
+    t_sub, bezier_index = fsplit(t, bezier_number)
+
+    pl = points[bezier_index]
+    pm = points[bezier_index + 1]
+    pr = points[bezier_index + 2]
+
+    p_start = lerp(pl, pm, .5)
+    p_end = lerp(pm, pr, .5)
+    control = pm
+
+    return bezier2(p_start, control, p_end, t_sub)
+
+# curve_interpolater takes path/list of points and parameter t
+def doPlot(controls, curve_interpolator, steps = 100):
   def drawControls(points):
     for i, p in enumerate(points):
       circe_size = mpl.rcParams['lines.markersize'] ** 2
@@ -44,7 +65,7 @@ def doPlot(controls, steps = 100):
     for artist in plt.gca().lines + plt.gca().collections:
       artist.remove()
 
-    drawCurve([ bezier3deg(*controls, t) for i, t in enumerate(np.linspace(0, 1., steps))])
+    drawCurve([ curve_interpolator(controls, t) for i, t in enumerate(np.linspace(0, 1., steps))])
     drawControls(controls)
     fig.canvas.draw()
 
@@ -92,7 +113,7 @@ def doPlot(controls, steps = 100):
   dragIndex = -1
 
   # set up plot
-  fig = plt.figure("3deg bezier editor")
+  fig = plt.figure("Simple simple editor")
   limits = plt.axis('equal')
   ax = plt.gca()
   plt.xlabel('X')
