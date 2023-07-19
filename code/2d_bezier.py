@@ -8,7 +8,7 @@ import matplotlib as mpl
 
 def main():
   steps=255
-  # one dimensional bezier
+
   controls=[[ 0, 0.],
           [ 0, .7],
           [-.1, 1],
