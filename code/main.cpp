@@ -11,6 +11,8 @@
 #define F32Max 3.402823e+38f
 #define U32Max ((unsigned int) - 1)
 
+#define Pi32 3.14159f
+
 #define TWEAK_TABLE_SIZE 256
 
 #define LUT_SIZE 32
@@ -118,8 +120,8 @@ Append(link_list *List, link *Link)
 	List->Last = (List->Last ? List->Last->Next : List->First) = Link;
 }
 
-#define TWEAK(Value) TweakValue(Value, __LINE__)
-//#define TWEAK(Value) Value
+//#define TWEAK(Value) TweakValue(Value, __LINE__)
+#define TWEAK(Value) Value
 
 unsigned int
 UIntHash( unsigned int a)
@@ -586,30 +588,6 @@ RandomBilateral(random_series *Series)
 	return(Result);
 }
 
-#if 0
-float 
-BezierLookUp(Vector2 *BezierLUT, float BezierY)
-{
-	for(int LUTIndex = 1;
-		LUTIndex < LUT_SIZE;
-		++LUTIndex)
-	{
-		Vector2 LUTValue = BezierLUT[LUTIndex];
-		
-		if(LUTValue.y >= BezierY)
-		{
-			Vector2 PrevLUTValue = BezierLUT[LUTIndex - 1];
-			
-			float LerpT = (BezierY - PrevLUTValue.y)/(LUTValue.y - PrevLUTValue.y);
-			
-			return(Lerp(PrevLUTValue.x, LerpT, LUTValue.x));
-		}
-	}
-	
-	return(BezierLUT[LUT_SIZE - 1].x);
-}
-#endif
-
 void
 DrawLUTs(Vector2 *FirstBezierLUT, Vector2 *SecondBezierLUT, float FirstLUTBaseY, float SecondLUTBaseY)
 {
@@ -746,127 +724,6 @@ DrawLUTIntersection(Vector2 *FirstBezierLUT, float FirstLUTBaseY, Vector2 *Secon
 	}
 }
 
-#if 0
-void
-DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount,
-		 road_list *ActiveRoadList, road_pool *Pool, random_series *RoadEntropy, Vector2 *FirstBezierLUT, Vector2 *SecondBezierLUT)
-{
-	float dX = 0.0f; //NOTE(moritz): Per line curve amount. ddX is per segment curve amount
-	float fCurrentCenterX     = fScreenWidth*0.5f + 0.5f; //NOTE(moritz): Road center line 
-	float BaseRoadHalfWidth   = fScreenWidth*0.7f;
-	float BaseStripeHalfWidth = 10.0f;
-	
-	float fDepthLineCount = (float)DepthLineCount;
-	
-	float Offset = PlayerP; //NOTE(moritz): For depth effects
-	if(Offset > 8.0f)
-		Offset -= 8.0f;
-	
-	road_segment *CurrentSegment = ActiveRoadList->First;
-	float BezierYOffset = 0.0f;
-	float fSegmentAt = 0.0f;
-	
-	if(CurrentSegment->Start.y < 0.0f)
-		BezierYOffset = (float)fabs(CurrentSegment->Start.y);
-	
-	Color DebugColor = RED;
-	
-	Vector2 *CurrentBezierLUT = FirstBezierLUT;
-	
-	for(int DepthLineIndex = 0;
-		DepthLineIndex < DepthLineCount;
-		++DepthLineIndex)
-	{
-		float fDepthLineIndex = (float)DepthLineIndex;
-		fSegmentAt += 1.0f;
-		
-		float fRoadWidth   = BaseRoadHalfWidth*DepthLines[DepthLineIndex].Scale + 80.0f;
-		float fStripeWidth = BaseStripeHalfWidth*DepthLines[DepthLineIndex].Scale;
-		
-		//NOTE(moritz): Basic bezier test
-		//float BezierT = fDepthLineIndex/fDepthLineCount;
-		float BezierY = fSegmentAt/CurrentSegment->Length;
-		BezierY += BezierYOffset;
-		
-		//BezierT = Clamp(0.0f, BezierT, 1.0f);
-		if(BezierY > CurrentSegment->End.y)
-		{
-			DebugColor = BLUE;
-			
-#if 1
-			//fSegmentAt -= CurrentSegment->Length;
-			//Get next segment..
-			//BezierY -= 1.0f;
-			//BezierY -= CurrentSegment->End.y;
-#endif
-			
-			if(CurrentSegment->Next)
-			{
-				CurrentSegment = CurrentSegment->Next;
-				
-				CurrentBezierLUT = SecondBezierLUT;
-			}
-			else
-			{
-				//TODO(moritz): Error
-				//CurrentSegment = NewSegment;
-			}
-		}
-		
-		//float BezierT = GetBezierTFromY(BezierLUT, BezierY);
-		fCurrentCenterX = 0.5f*fScreenWidth + BezierLookUp(CurrentBezierLUT, BezierY)/*Bezier3(*CurrentSegment, BezierT)*/*0.5f*fScreenWidth;
-		
-		float RoadWorldZ = DepthLines[DepthLineIndex].Depth*MaxDistance + Offset;
-		
-		Color GrassColor = GREEN;
-		Color RoadColor  = DARKGRAY;
-		
-		if(fmod(RoadWorldZ, 8.0f) > 4.0f)
-		{
-			GrassColor = DARKGREEN;
-			RoadColor  = GRAY;
-		}
-		
-		//NOTE(moritz):Draw grass line first... draw road on top... 
-		Vector2 GrassStart = {0.0f, fScreenHeight - fDepthLineIndex - 0.5f};
-		Vector2 GrassEnd   = {fScreenWidth, fScreenHeight - fDepthLineIndex - 0.5f};
-		DrawLineV(GrassStart, GrassEnd, GrassColor);
-		
-		//NOTE(moritz): Draw road
-		Vector2 RoadStart = {fCurrentCenterX - fRoadWidth, fScreenHeight - fDepthLineIndex - 0.5f};
-		Vector2 RoadEnd   = {fCurrentCenterX + fRoadWidth, fScreenHeight - fDepthLineIndex - 0.5f};
-		
-#if 1
-		//NOTE(moritz): Bottom segment / next segment vis
-		DrawLineV(RoadStart, RoadEnd, DebugColor);
-#endif
-		
-#if 0
-		//NOTE(moritz): Curvature debug vis
-		if(CurrentSegment.ddX > 0.0f)
-			DrawLineV(RoadStart, RoadEnd, RED);
-		else if(CurrentSegment.ddX < 0.0f)
-			DrawLineV(RoadStart, RoadEnd, YELLOW);
-		else
-			DrawLineV(RoadStart, RoadEnd, BLUE);
-#endif
-		
-#if 0
-		//NOTE(moritz): Regular drawing
-		DrawLineV(RoadStart, RoadEnd, RoadColor);
-#endif
-		
-		//NOTE(moritz): Draw road stripes
-		if(fmod(RoadWorldZ + 0.5f, 2.0f) > 1.0f) //TODO(moritz): 0.5f -> is stripe offset
-		{
-			Vector2 StripeStart = {fCurrentCenterX - fStripeWidth, fScreenHeight - fDepthLineIndex - 0.5f};
-			Vector2 StripeEnd   = {fCurrentCenterX + fStripeWidth, fScreenHeight - fDepthLineIndex - 0.5f};
-			DrawLineV(StripeStart, StripeEnd, WHITE);
-		}
-	}
-}
-#endif
-
 void
 DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeight, depth_line *DepthLines,
 		 int DepthLineCount, Vector2 *FirstBezierLUT, Vector2 *SecondBezierLUT, float FirstLUTBaseY, float SecondLUTBaseY)
@@ -935,7 +792,20 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 			}
 		}
 		
-		fCurrentCenterX = 0.5f*fScreenWidth + fCurrentCenterX*0.5f*fScreenWidth;
+#if 0
+		//NOTE(moritz): Depth based damping
+		//Probably too much
+		float PerspectiveCurveDamping = sinf( (DepthLines[DepthLineIndex].Depth + TWEAK(0.008f)) * 0.5f*Pi32);
+		PerspectiveCurveDamping = Clamp(0.0f, PerspectiveCurveDamping, 1.0f);
+		fCurrentCenterX = 0.5f*fScreenWidth + PerspectiveCurveDamping*fCurrentCenterX*0.5f*fScreenWidth;
+#else
+		//NOTE(moritz): Made up damping... Seems better
+		//float CurveDamping = sinf(fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*0.5f*Pi32);
+		fYLineNorm -= 0.05f;
+		float CurveDamping = sinf(fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*0.5f*Pi32);
+		CurveDamping = Clamp(0.0f, CurveDamping, 1.0f);
+		fCurrentCenterX = 0.5f*fScreenWidth + CurveDamping*fCurrentCenterX*0.5f*fScreenWidth;
+#endif
 		
 		float RoadWorldZ = DepthLines[DepthLineIndex].Depth*MaxDistance + Offset;
 		
@@ -1210,7 +1080,7 @@ And then the game loads in the textures with mipmaps included.
 	//---------------------------------------------------------
 	
 	//NOTE(moritz): Player
-	float PlayerSpeed = 10.0f;
+	float PlayerSpeed = 0.0f;
 	float PlayerP     = 0.0f;
 	
 	//---------------------------------------------------------
@@ -1331,6 +1201,8 @@ And then the game loads in the textures with mipmaps included.
 		
 		float dtForFrame = GetFrameTime();
 		
+		PlayerSpeed = TWEAK(15.0f);
+		
 		//NOTE(moritz): Update player position
 		float dPlayerP = PlayerSpeed*dtForFrame;
 		//TODO(moritz): Floating point precision for PlayerP
@@ -1341,12 +1213,12 @@ And then the game loads in the textures with mipmaps included.
 		/*
 NOTE(moritz): Road segment tweaking
 */
-		ActiveRoadList.First->Start.x = TWEAK(0.0f);
+		ActiveRoadList.First->Start.x = TWEAK(0.2f);
 		ActiveRoadList.First->Start.y = TWEAK(0.0f);
-		ActiveRoadList.First->C0.x    = TWEAK(0.6f);
-		ActiveRoadList.First->C0.y    = TWEAK(0.95f);
-		ActiveRoadList.First->C1.x    = TWEAK(0.0f);
-		ActiveRoadList.First->C1.y    = TWEAK(0.6666f);
+		ActiveRoadList.First->C0.x    = TWEAK(0.0f);
+		ActiveRoadList.First->C0.y    = TWEAK(0.33333f);
+		ActiveRoadList.First->C1.x    = TWEAK(-0.2f);
+		ActiveRoadList.First->C1.y    = TWEAK(0.9f);
 		ActiveRoadList.First->End.x   = TWEAK(0.2f);
 		ActiveRoadList.First->End.y   = TWEAK(1.0f);
 		
@@ -1356,6 +1228,18 @@ NOTE(moritz): Road segment tweaking
 		ActiveRoadList.First->C0.y    *= OneOverEndY;
 		ActiveRoadList.First->C1.y    *= OneOverEndY;
 		ActiveRoadList.First->End.y   *= OneOverEndY;
+		
+		{
+			float tLUT = 0.0f;
+			for(int LUTIndex = 0;
+				LUTIndex < LUT_SIZE;
+				++LUTIndex)
+			{
+				FirstBezierLUT[LUTIndex] = Bezier3(*ActiveRoadList.First, tLUT);
+				
+				tLUT += tStep;
+			}
+		}
 #endif
 		
 		
@@ -1478,14 +1362,12 @@ NOTE(moritz): Road segment tweaking
 		//DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
 		///*BottomSegment, NextSegment*/&ActiveRoadList, &RoadPool, &RoadEntropy, FirstBezierLUT, SecondBezierLUT);
 		
-		float RoadDelta = 3.0f*dPlayerP/MaxDistance;
+		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
 		FirstLUTBaseY  -= RoadDelta;
 		SecondLUTBaseY -= RoadDelta;
-		//DrawLUTIntersection(FirstBezierLUT, FirstLUTBaseY, SecondBezierLUT, SecondLUTBaseY);
 		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
 				 FirstBezierLUT, SecondBezierLUT, FirstLUTBaseY, SecondLUTBaseY);
 		DrawLUTs(FirstBezierLUT, SecondBezierLUT, FirstLUTBaseY, SecondLUTBaseY);
-		//DrawLUTQuads(FirstBezierLUT, FirstLUTBaseY);
 		
 #if 0
 		if(TreeDistance > 0.0f)
