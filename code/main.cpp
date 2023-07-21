@@ -13,7 +13,6 @@
 
 #define TWEAK_TABLE_SIZE 256
 
-#define LUT_SIZE 32
 
 struct tweak_entry
 {
@@ -162,32 +161,10 @@ Lerp(Vector2 A, float t, Vector2 B)
 	return(Result);
 }
 
-float
-Bezier2(float Start, float End, float Control, float t)
-{
-	float P0 = Lerp(Start,   t, Control);
-	float P1 = Lerp(Control, t, End);
-	
-	float Result = Lerp(P0, t, P1);
-	return(Result);
-}
-
 struct road_segment
 {
-	//Basis (3rd degree)
-	Vector2 Start;
-	Vector2 C0;
-	Vector2 C1;
-	Vector2 End;
-	
-	//1st derivative (2nd degree) - Velocity
-	Vector2 VStart;
-	Vector2 VC0;
-	Vector2 VEnd;
-	
-	//2md derivative (1st degree) - Acceleration
-	Vector2 AStart;
-	Vector2 AEnd;
+	float ddX;
+	float Position;
 	
 	road_segment *Next;
 };
@@ -268,10 +245,10 @@ Append(link_list *List, link *Link)
 	List->Last = (List->Last ? List->Last->Next : List->First) = Link;
 }
 
-#define TWEAK(Value) TweakValue(Value, __LINE__)
-//#define TWEAK(Value) Value
+//#define TWEAK(Value) TweakValue(Value, __LINE__)
+#define TWEAK(Value) Value
 
-//TODO(moritz): Source github integer hash thing...
+//NOTE(moritz): Source: https://gist.github.com/badboy/6267743 (Rober Jenkins 32 bit integer hash function)
 unsigned int
 UIntHash( unsigned int a)
 {
@@ -363,7 +340,6 @@ ReloadSourceCode(char **SourceCode, link_pool *LinkPool, link_list *LinkList)
 		
 		if(HitEOL)
 		{
-			//if(BOL < EOL)
 			if(BOL <= EOL) //NOTE(moritz): Process empty lines as lines as well. To "guarantee" parity with C preprocessor
 			{
 				link *Link = AllocateLink(LinkPool); 
@@ -524,19 +500,6 @@ ZeroSize(void *InitDest, int Size)
 	}
 }
 
-void
-SetRoadSegmentDerivatives(road_segment *Segment)
-{
-	//1st derivative (2nd degree) - Velocity
-	Segment->VStart = Segment->C0 - Segment->Start;
-	Segment->VC0    = Segment->C1 - Segment->C0;
-	Segment->VEnd   = Segment->End - Segment->C1;
-	
-	//2md derivative (1st degree) - Acceleration
-	Segment->AStart = Segment->VC0 - Segment->VStart;
-	Segment->AEnd   = Segment->VEnd - Segment->VC0;
-}
-
 road_segment *
 AllocateRoadSegment(road_pool *Pool)
 {
@@ -591,39 +554,6 @@ Append(road_list *ActiveRoadList, road_segment *Segment)
 	ActiveRoadList->Last = (ActiveRoadList->Last ? ActiveRoadList->Last->Next : ActiveRoadList->First) = Segment;
 }
 
-Vector2
-Bezier3(Vector2 A, Vector2 B, Vector2 C, Vector2 D, float t)
-{
-	//NOTE(moritz): A: start, D: end
-	//B: control0
-	//C: control1
-	
-	Vector2 P0 = Lerp(A, t, B);
-	Vector2 P1 = Lerp(B, t, C);
-	Vector2 P2 = Lerp(C, t, D);
-	
-	Vector2 P01 = Lerp(P0, t, P1);
-	Vector2 P12 = Lerp(P1, t, P2);
-	
-	Vector2 P0112 = Lerp(P01, t, P12);
-	
-	return(P0112);
-}
-
-Vector2
-Bezier3(road_segment RoadSegment, float t)
-{
-	return(Bezier3(RoadSegment.Start, RoadSegment.C0,
-				   RoadSegment.C1, RoadSegment.End, t));
-}
-
-Vector2
-Bezier3(road_segment *RoadSegment, float t)
-{
-	return(Bezier3(RoadSegment->Start, RoadSegment->C0,
-				   RoadSegment->C1, RoadSegment->End, t));
-}
-
 struct random_series
 {
 	unsigned int State;
@@ -657,254 +587,8 @@ RandomBilateral(random_series *Series)
 }
 
 void
-DrawLUTs(Vector2 *FirstBezierLUT, Vector2 *SecondBezierLUT, 
-		 Vector2 *FirstBezierLUTVel, Vector2 *SecondBezierLUTVel,
-		 float FirstLUTBaseY, float SecondLUTBaseY)
-{
-	for(int LUTIndex = 0;
-		LUTIndex < (LUT_SIZE - 1);
-		++LUTIndex)
-	{
-		Vector2 StartP = FirstBezierLUT[LUTIndex];
-		Vector2 EndP   = FirstBezierLUT[LUTIndex + 1];
-		
-		StartP.x *= 400.0f;
-		StartP.x += 400.0f;
-		
-		StartP.y += FirstLUTBaseY;
-		
-		StartP.y *= 225.0f;
-		StartP.y  = 450.0f - StartP.y; 
-		
-		
-		
-		EndP.x *= 400.0f;
-		EndP.x += 400.0f;
-		
-		EndP.y += FirstLUTBaseY;
-		
-		EndP.y *= 225.0f;
-		EndP.y  = 450.0f - EndP.y; 
-		
-		//NOTE(moritz):Normal (for drawing, the y of the normal has to get flipped)
-		Vector2 DrawNormal = FirstBezierLUTVel[LUTIndex];
-		DrawNormal.y *= -1.0f;
-		Vector2 Normal0Start = Lerp(StartP, 0.5f, EndP);
-		Vector2 Normal0End   = Normal0Start + DrawNormal*20.0f;
-		DrawLineEx(Normal0Start, Normal0End, 4.0f, PINK);
-		
-		DrawLineEx(StartP, EndP, 4.0f, RED);
-	}
-	
-#if 1
-	for(int LUTIndex = 0;
-		LUTIndex < (LUT_SIZE - 1);
-		++LUTIndex)
-	{
-		Vector2 StartP = SecondBezierLUT[LUTIndex];
-		Vector2 EndP   = SecondBezierLUT[LUTIndex + 1];
-		
-		StartP.x *= 400.0f;
-		StartP.x += 400.0f;
-		
-		StartP.y += SecondLUTBaseY;
-		
-		StartP.y *= 225.0f;
-		StartP.y  = 450.0f - StartP.y; 
-		
-		
-		
-		EndP.x *= 400.0f;
-		EndP.x += 400.0f;
-		
-		EndP.y += SecondLUTBaseY;
-		
-		EndP.y *= 225.0f;
-		EndP.y  = 450.0f - EndP.y; 
-		
-		//NOTE(moritz):Normal (for drawing, the y of the normal has to get flipped)
-		Vector2 DrawNormal = SecondBezierLUTVel[LUTIndex];
-		DrawNormal.y *= -1.0f;
-		Vector2 Normal0Start = Lerp(StartP, 0.5f, EndP);
-		Vector2 Normal0End   = Normal0Start + DrawNormal*20.0f;
-		DrawLineEx(Normal0Start, Normal0End, 4.0f, PINK);
-		
-		DrawLineEx(StartP, EndP, 4.0f, BLUE);
-	}
-#endif
-}
-
-void
-DrawLUTIntersection(Vector2 *FirstBezierLUT, float FirstLUTBaseY, Vector2 *SecondBezierLUT, float SecondLUTBaseY)
-{
-	for(int YLineIndex = 0;
-		YLineIndex < 255;
-		++YLineIndex)
-	{
-		float fYLineNorm = (float)YLineIndex/255.0f;
-		float fYLine = (float)YLineIndex + 0.5f;
-		float X      = 0.0f;
-		
-		
-		for(int LUTIndex = 1;
-			LUTIndex < LUT_SIZE;
-			++LUTIndex)
-		{
-			Vector2 LUTValue = FirstBezierLUT[LUTIndex];
-			Vector2 PrevLUTValue = FirstBezierLUT[LUTIndex - 1];
-			
-			LUTValue.y     += FirstLUTBaseY;
-			PrevLUTValue.y += FirstLUTBaseY;
-			
-			if(LUTValue.y >= fYLineNorm)
-			{
-				float LerpT = (fYLineNorm - PrevLUTValue.y)/(LUTValue.y - PrevLUTValue.y);
-				
-				X = (Lerp(PrevLUTValue.x, LerpT, LUTValue.x));
-				
-				break;
-			}
-		}
-		
-		if(X == 0.0f)
-		{
-			for(int LUTIndex = 1;
-				LUTIndex < LUT_SIZE;
-				++LUTIndex)
-			{
-				Vector2 LUTValue = SecondBezierLUT[LUTIndex];
-				Vector2 PrevLUTValue = SecondBezierLUT[LUTIndex - 1];
-				
-				LUTValue.y     += SecondLUTBaseY;
-				PrevLUTValue.y += SecondLUTBaseY;
-				
-				if(LUTValue.y >= fYLineNorm)
-				{
-					
-					
-					float LerpT = (fYLineNorm - PrevLUTValue.y)/(LUTValue.y - PrevLUTValue.y);
-					
-					X = (Lerp(PrevLUTValue.x, LerpT, LUTValue.x));
-					
-					break;
-				}
-			}
-		}
-		
-		Vector2 StartP;
-		StartP.x  = X;
-		StartP.x *= 400.0f;
-		StartP.x += 400.0f - 50.0f;
-		
-		StartP.y  = fYLineNorm;
-		StartP.y *= 225.0f;
-		StartP.y = 450.0f - StartP.y;
-		
-		
-		Vector2 EndP;
-		EndP.x = StartP.x + 100.0f;
-		EndP.y = StartP.y;
-		
-		DrawLineV(StartP, EndP, GRAY);
-		
-	}
-}
-
-void
-LUTLookUp(Vector2 *LUT, float LUTBaseYOffset, float FindY, float *XOut, int *NormalIndexOut)
-{
-	//NOTE(moritz): Old implementation
-	for(int LUTIndex = 1;
-		LUTIndex < LUT_SIZE;
-		++LUTIndex)
-	{
-		Vector2 LUTValue     = LUT[LUTIndex];
-		Vector2 PrevLUTValue = LUT[LUTIndex - 1];
-		
-		LUTValue.y     += LUTBaseYOffset;
-		PrevLUTValue.y += LUTBaseYOffset;
-		
-		if(LUTValue.y >= FindY) //TODO(moritz): Should it be previous or next lut value?
-		{
-			float LerpT = (FindY - PrevLUTValue.y)/(LUTValue.y - PrevLUTValue.y);
-			
-			*XOut = Lerp(PrevLUTValue.x, LerpT, LUTValue.x);
-			
-			*NormalIndexOut = LUTIndex - 1;
-			
-			return;
-		}
-	}
-}
-
-void
-LUTNormal(Vector2 *LUT, float LUTBaseYOffset, float FindY, float *NormalXOut)
-{
-	for(int LUTIndex = 1;
-		LUTIndex < LUT_SIZE;
-		++LUTIndex)
-	{
-		Vector2 LUTValue     = LUT[LUTIndex];
-		Vector2 PrevLUTValue = LUT[LUTIndex - 1];
-		
-		LUTValue.y     += LUTBaseYOffset;
-		PrevLUTValue.y += LUTBaseYOffset;
-		
-		if(LUTValue.y >= FindY) //TODO(moritz): Should it be previous or next lut value?
-		{
-#if 0
-			float LerpT = (FindY - PrevLUTValue.y)/(LUTValue.y - PrevLUTValue.y);
-			
-			*XOut = Lerp(PrevLUTValue.x, LerpT, LUTValue.x);
-#endif
-			
-			Vector2 LUTNormal;
-			LUTNormal.x = -(LUTValue.y - PrevLUTValue.y);
-			LUTNormal.y = LUTValue.x - PrevLUTValue.x;
-			
-			//*NormalXOut += Sign(PrevLUTValue.x - LUTValue.x)*NOZ(LUTNormal).x;
-			*NormalXOut += Sign(LUTValue.x - PrevLUTValue.x)*NOZ(LUTNormal).x;
-			
-			return;
-		}
-	}
-}
-
-void
-SetLUT(Vector2 *LUT, Vector2 *LUTVel, road_segment *Segment, float tStep, float YOffset = 0.0f)
-{
-	float tLUT = 0.0f;
-	for(int LUTIndex = 0;
-		LUTIndex < LUT_SIZE;
-		++LUTIndex)
-	{
-		LUT[LUTIndex] = Bezier3(Segment, tLUT);
-		
-		LUT[LUTIndex].y += YOffset;
-		
-		tLUT += tStep;
-	}
-	
-	for(int LUTIndex = 0;
-		LUTIndex < (LUT_SIZE - 1);
-		++LUTIndex)
-	{
-		Vector2 LUTValue     = LUT[LUTIndex];
-		Vector2 NextLUTValue = LUT[LUTIndex + 1];
-		
-		Vector2 LUTNormal;
-		LUTNormal.x = -(NextLUTValue.y - LUTValue.y);
-		LUTNormal.y = NextLUTValue.x - LUTValue.x;
-		
-		LUTVel[LUTIndex] = Sign(NextLUTValue.x - LUTValue.x)*NOZ(LUTNormal);
-		//LUTVel[LUTIndex] = NOZ(LUTNormal);
-		//LUTVel[LUTIndex].x *= Sign(NextLUTValue.x - LUTValue.x);
-	}
-}
-
-void
 DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeight, depth_line *DepthLines,
-		 int DepthLineCount, Vector2 *FirstBezierLUT, Vector2 *SecondBezierLUT, float FirstLUTBaseY, float SecondLUTBaseY)
+		 int DepthLineCount, road_list *ActiveRoadList/*Vector2 *FirstBezierLUT, Vector2 *SecondBezierLUT, float FirstLUTBaseY, float SecondLUTBaseY*/)
 {
 	float fDepthLineCount = (float)DepthLineCount;
 	float BaseRoadHalfWidth = fScreenWidth*0.6f;
@@ -913,6 +597,10 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	float Offset = PlayerP;
 	if(Offset > 8.0f)
 		Offset -= 8.0f;
+	
+	road_segment *CurrentSegment = ActiveRoadList->First;
+	float dX = 0.0f;
+	float fCurrentCenterX = 0.5f*fScreenWidth;
 	
 	for(int DepthLineIndex = 0;
 		DepthLineIndex < DepthLineCount;
@@ -925,6 +613,16 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		
 		float fYLineNorm = fLineY/fDepthLineCount;
 		
+		if(CurrentSegment->Next)
+		{
+			if(fYLineNorm > CurrentSegment->Next->Position)
+				CurrentSegment = CurrentSegment->Next;
+		}
+		
+		dX += CurrentSegment->ddX;
+		fCurrentCenterX += dX;
+		
+#if 0
 		float fCurrentCenterX = F32Max;
 		
 		int IGNORED = -1;
@@ -933,6 +631,7 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		
 		if(fCurrentCenterX == F32Max)
 			LUTLookUp(SecondBezierLUT, SecondLUTBaseY, fYLineNorm, &fCurrentCenterX, &IGNORED);
+#endif
 		
 #if 0
 		//NOTE(moritz): Depth based damping
@@ -946,7 +645,14 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		fYLineNorm -= 0.05f; //NOTE(moritz): This just some fuding for the damping
 		float CurveDamping = sinf(fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*0.5f*Pi32);
 		CurveDamping = Clamp(0.0f, CurveDamping, 1.0f);
-		fCurrentCenterX = 0.5f*fScreenWidth + CurveDamping*fCurrentCenterX*0.5f*fScreenWidth;
+		//fCurrentCenterX = 0.5f*fScreenWidth + CurveDamping*fCurrentCenterX*0.5f*fScreenWidth;
+		
+		float CurrentCenterDelta = fCurrentCenterX - 0.5f*fScreenWidth;
+		
+		//TODO(moritz):Debug
+		CurveDamping = 1.0f;
+		
+		fCurrentCenterX = 0.5f*fScreenWidth + CurveDamping*CurrentCenterDelta;//fCurrentCenterX*0.5f*fScreenWidth;
 #endif
 		
 		float RoadWorldZ = DepthLines[DepthLineIndex].Depth*MaxDistance + Offset;
@@ -1128,6 +834,17 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 }
 #endif
 
+inline void
+InitSegment(road_segment *Segment, road_segment *PrevSegment, random_series *Entropy)
+{
+	if(PrevSegment)
+		Segment->Position = PrevSegment->Position + 1.0f;//.2f + 0.5f*RandomUnilateral(Entropy); //NOTE(moritz): Float depth map position
+	
+	float Rand = RandomBilateral(Entropy)*0.01f;
+	float SignRand = Sign(Rand);
+	Segment->ddX      = 0.01f*SignRand + Rand;
+}
+
 
 int
 main()
@@ -1233,59 +950,8 @@ And then the game loads in the textures with mipmaps included.
 	
 	road_segment *InitialRoadSegment = AllocateRoadSegment(&RoadPool);
 	
-	InitialRoadSegment->Start.x = 0.0f;
-	InitialRoadSegment->Start.y = 0.0f;
-	
-#if 0
-	//NOTE(moritz): constrained randomness
-	InitialRoadSegment->C0.x    = .2f*RandomBilateral(&RoadEntropy);
-	InitialRoadSegment->C0.y    = 0.1f + RandomUnilateral(&RoadEntropy);
-	InitialRoadSegment->C1.x    = .2f*RandomBilateral(&RoadEntropy);
-	InitialRoadSegment->C1.y    = InitialRoadSegment->C0.y + 0.1f + RandomUnilateral(&RoadEntropy);
-	InitialRoadSegment->End.x   = .2f*RandomBilateral(&RoadEntropy);
-	InitialRoadSegment->End.y   = InitialRoadSegment->C1.y + 0.1f + RandomUnilateral(&RoadEntropy);
-#endif
-	
-#if 0
-	//NOTE(moritz): Straight road
-	InitialRoadSegment->C0.x  = 0.0f;
-	InitialRoadSegment->C0.y  = 1.0f/3.0f;
-	InitialRoadSegment->C1.x  = 0.0f;
-	InitialRoadSegment->C1.y  = 2.0f/3.0f;
-	InitialRoadSegment->End.x = 0.0f;
-	InitialRoadSegment->End.y = 1.0f;
-#endif
-	
-#if 0
-	//NOTE(moritz): Right curve road
-	InitialRoadSegment->C0.x  = 0.0f;
-	InitialRoadSegment->C0.y  = 1.0f/3.0f;
-	InitialRoadSegment->C1.x  = 0.5f;
-	InitialRoadSegment->C1.y  = 2.0f/3.0f;
-	InitialRoadSegment->End.x = 1.0f;
-	InitialRoadSegment->End.y = 1.0f;
-#endif
-	
-#if 1
-	InitialRoadSegment->Start.x = 0.0f;
-	InitialRoadSegment->Start.y = 0.0f;
-	InitialRoadSegment->C0.x    = 0.6f;
-	InitialRoadSegment->C0.y    = 0.95f;
-	InitialRoadSegment->C1.x    = 0.0f;
-	InitialRoadSegment->C1.y    = 2.0f/3.0f;
-	InitialRoadSegment->End.x   = 0.2f;
-	InitialRoadSegment->End.y   = 1.0f;
-#endif
-	
-	float OneOverEndY = 1.0f/InitialRoadSegment->End.y;
-	
-	//NOTE(moritz): Need to renormalise by End.y
-	InitialRoadSegment->Start.y *= OneOverEndY;
-	InitialRoadSegment->C0.y    *= OneOverEndY;
-	InitialRoadSegment->C1.y    *= OneOverEndY;
-	InitialRoadSegment->End.y   *= OneOverEndY;
-	
-	SetRoadSegmentDerivatives(InitialRoadSegment);
+	InitialRoadSegment->Position = 0.0f;
+	InitialRoadSegment->ddX      = RandomBilateral(&RoadEntropy)*0.01f;
 	
 	Append(&ActiveRoadList, InitialRoadSegment);
 	
@@ -1296,29 +962,13 @@ And then the game loads in the textures with mipmaps included.
 	
 	//---------------------------------------------------------
 	
-	Vector2 *FirstBezierLUT     = (Vector2 *)malloc(sizeof(Vector2)*LUT_SIZE);
-	ZeroSize(FirstBezierLUT, sizeof(Vector2)*LUT_SIZE);
-	Vector2 *FirstBezierLUTVel  = (Vector2 *)malloc(sizeof(Vector2)*LUT_SIZE);
-	ZeroSize(FirstBezierLUTVel, sizeof(Vector2)*LUT_SIZE);
-	Vector2 *FirstBezierLUTAcc  = (Vector2 *)malloc(sizeof(Vector2)*LUT_SIZE);
-	ZeroSize(FirstBezierLUTAcc, sizeof(Vector2)*LUT_SIZE);
-	
-	Vector2 *SecondBezierLUT    = (Vector2 *)malloc(sizeof(Vector2)*LUT_SIZE);
-	ZeroSize(SecondBezierLUT, sizeof(Vector2)*LUT_SIZE);
-	Vector2 *SecondBezierLUTVel = (Vector2 *)malloc(sizeof(Vector2)*LUT_SIZE);
-	ZeroSize(SecondBezierLUTVel, sizeof(Vector2)*LUT_SIZE);
-	Vector2 *SecondBezierLUTAcc = (Vector2 *)malloc(sizeof(Vector2)*LUT_SIZE);
-	ZeroSize(SecondBezierLUTAcc, sizeof(Vector2)*LUT_SIZE);
-	
-	float LUTtStep = 1.0f/(float)(LUT_SIZE - 1);
-	
-	SetLUT(FirstBezierLUT, FirstBezierLUTVel, ActiveRoadList.First, LUTtStep);
-	
 	//TODO(moritz): Very gross D:
 	bool FirstBaseWrapped = true;
 	float FirstLUTBaseY  = 0.0f;
 	bool SecondBaseWrapped = true;
 	float SecondLUTBaseY = 1.0f;
+	
+	int PermInitialNormalIndex = -1;
 	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
@@ -1346,54 +996,49 @@ And then the game loads in the textures with mipmaps included.
 		//TODO(moritz): Floating point precision for PlayerP
 		PlayerP += dPlayerP;
 		
+		//NOTE(moritz): Update active segments position
+		float RoadDelta = TWEAK(2.0f)*dPlayerP/MaxDistance;
+		//FirstLUTBaseY  -= RoadDelta;
+		//SecondLUTBaseY -= RoadDelta;
 		
-#if 0
-		/*
-NOTE(moritz): Road segment tweaking
-*/
-		ActiveRoadList.First->Start.x = TWEAK(0.2f);
-		ActiveRoadList.First->Start.y = TWEAK(0.0f);
-		ActiveRoadList.First->C0.x    = TWEAK(0.0f);
-		ActiveRoadList.First->C0.y    = TWEAK(0.33333f);
-		ActiveRoadList.First->C1.x    = TWEAK(-0.2f);
-		ActiveRoadList.First->C1.y    = TWEAK(0.9f);
-		ActiveRoadList.First->End.x   = TWEAK(0.2f);
-		ActiveRoadList.First->End.y   = TWEAK(1.0f);
+		for(road_segment *Segment = ActiveRoadList.First;
+			Segment;
+			Segment = Segment->Next)
+		{
+			Segment->Position -= RoadDelta;
+		}
 		
-		float OneOverEndY = 1.0f/ActiveRoadList.First->End.y;
-		
-		ActiveRoadList.First->Start.y *= OneOverEndY;
-		ActiveRoadList.First->C0.y    *= OneOverEndY;
-		ActiveRoadList.First->C1.y    *= OneOverEndY;
-		ActiveRoadList.First->End.y   *= OneOverEndY;
-		
-		SetLUT(FirstBezierLUT, ActiveRoadList.First, LUTtStep);
-#endif
-		
+		//NOTE(moritz): Road segment tweaking
+		//ActiveRoadList.First->ddX = TWEAK(0.1f);
 		
 		
 #if 1
-		//NOTE(moritz): update road segment position
-		if((SecondLUTBaseY < 0.0f) && SecondBaseWrapped)
+		if(ActiveRoadList.Last->Position < 1.0f)
+		{
+			road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
+			
+			InitSegment(NewSegment, ActiveRoadList.Last, &RoadEntropy);
+			
+			Append(&ActiveRoadList, NewSegment);
+		}
+		
+		//TODO(moritz): Set new base segment and generate new segment
+		//if((SecondLUTBaseY < 0.0f) && SecondBaseWrapped)
+		if(ActiveRoadList.First->Next->Position <= 0.0f)
 		{
 			DeleteHeadSegment(&ActiveRoadList, &RoadPool);
 			
-			//NOTE(moritz): Swap LUT pointers
-			Vector2 *Temp = FirstBezierLUT;
-			FirstBezierLUT = SecondBezierLUT;
-			SecondBezierLUT = Temp;
+			road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
 			
-			Temp = FirstBezierLUTVel;
-			FirstBezierLUTVel = SecondBezierLUTVel;
-			SecondBezierLUTVel = Temp;
+			InitSegment(NewSegment, ActiveRoadList.Last, &RoadEntropy);
 			
-			FirstLUTBaseY = SecondLUTBaseY;
-			SecondLUTBaseY = FirstLUTBaseY + 1.0f;
+			Append(&ActiveRoadList, NewSegment);
 			
 			FirstBaseWrapped = true;
 		}
 		
-		//NOTE(moritz): If last segment end.y < horizon. Add new segment...
+#if 0
+		//TODO(moritz): If last segment < horizon. Add new segment...
 		//if(ActiveRoadList.Last->End.y < 1.0f)
 		if((FirstLUTBaseY < 0.0f) && FirstBaseWrapped)
 		{
@@ -1401,47 +1046,12 @@ NOTE(moritz): Road segment tweaking
 			
 			road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
 			
-			road_segment *CurrentSegment = ActiveRoadList.First;
-			
-			NewSegment->Start = CurrentSegment->End;
-			//Vector2 Diff = NewSegment->Start - CurrentSegment->C1;
-			
-			NewSegment->C0 = 2.0f*CurrentSegment->End - CurrentSegment->C1;//NewSegment->Start + Diff;
-			
-			NewSegment->C1.x = RandomBilateral(&RoadEntropy);
-			NewSegment->C1.y = NewSegment->C0.y + 0.1f /*+ RandomUnilateral(&RoadEntropy)*/;
-			
-			NewSegment->End.x = RandomBilateral(&RoadEntropy);
-			NewSegment->End.y = NewSegment->Start.y + 1.0f;//+ 0.1f /*+ RandomUnilateral(&RoadEntropy)*/;
-			
-#if 1
-			float OneOverYRange = 1.0f/(NewSegment->End.y - NewSegment->Start.y);
-			float YOffset = NewSegment->Start.y;
-			
-			//NOTE(moritz): Need to renormalise by End.y
-			NewSegment->Start.y -= YOffset;
-			NewSegment->Start.y *= OneOverYRange;
-			NewSegment->Start.y += YOffset;
-			
-			NewSegment->C0.y -= YOffset;
-			NewSegment->C0.y *= OneOverYRange;
-			NewSegment->C0.y += YOffset;
-			
-			NewSegment->C1.y -= YOffset;
-			NewSegment->C1.y *= OneOverYRange;
-			NewSegment->C1.y += YOffset;
-			
-			NewSegment->End.y -= YOffset;
-			NewSegment->End.y *= OneOverYRange;
-			NewSegment->End.y += YOffset;
-#endif
-			
-			SetRoadSegmentDerivatives(NewSegment);
+			InitSegment(NewSegment, &RoadEntropy);
 			
 			Append(&ActiveRoadList, NewSegment);
-			
-			SetLUT(SecondBezierLUT, SecondBezierLUTVel, ActiveRoadList.Last, LUTtStep, -YOffset);
 		}
+#endif
+		
 #endif
 		
 		
@@ -1455,16 +1065,28 @@ NOTE(moritz): Road segment tweaking
 		ClearBackground(WHITE);
 		DrawFPS(10, 10);
 		
-		//DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-		///*BottomSegment, NextSegment*/&ActiveRoadList, &RoadPool, &RoadEntropy, FirstBezierLUT, SecondBezierLUT);
 		
-		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
-		FirstLUTBaseY  -= RoadDelta;
-		SecondLUTBaseY -= RoadDelta;
+		
 		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-				 FirstBezierLUT, SecondBezierLUT, FirstLUTBaseY, SecondLUTBaseY);
-		DrawLUTs(FirstBezierLUT, SecondBezierLUT, FirstBezierLUTVel, SecondBezierLUTVel, FirstLUTBaseY, SecondLUTBaseY);
+				 &ActiveRoadList/*,FirstBezierLUT, SecondBezierLUT, FirstLUTBaseY, SecondLUTBaseY*/);
 		
+		
+		//NOTE(moritz): Visualise where the segments are at...
+		for(road_segment *Segment = ActiveRoadList.First;
+			Segment;
+			Segment = Segment->Next)
+		{
+			float SegmentY = Segment->Position;
+			
+			Vector2 MarkerStart;
+			MarkerStart.x = 0.0f;
+			MarkerStart.y = fScreenHeight - SegmentY*MaxDistance;
+			
+			Vector2 MarkerEnd = MarkerStart;
+			MarkerEnd.x = fScreenWidth;
+			
+			DrawLineEx(MarkerStart, MarkerEnd, 4.0f, ORANGE);
+		}
 #if 0
 		if(TreeDistance > 0.0f)
 			DrawBillboard(TreeTexture, TreeDistance, MaxDistance,
@@ -1484,8 +1106,7 @@ NOTE(moritz): Road segment tweaking
 			++DepthLineIndex)
 		{
 			float fDepthLineIndex = (float)DepthLineIndex;
-			x
-				if(fDepthLineIndex > NextSegment.Position)
+			if(fDepthLineIndex > NextSegment.Position)
 			{
 				CurrentSegment = NextSegment;
 			}
@@ -1516,168 +1137,14 @@ NOTE(moritz): Road segment tweaking
 		
 #endif
 		
-		//NOTE(moritz): Draw curve force
-		float CurveNormalX = 0.0f;
-		
-		//NOTE(moritz): Maybe average normals across region?
-		for(int LineIndex = 165;
-			LineIndex < 225;
-			++LineIndex)
-		{
-			float fLineNorm = (float)LineIndex/255.0f;
-			
-			float IGNORED = 0.0f;
-			int   NormalIndex = -1;
-			
-			Vector2 *NormalLUT = FirstBezierLUTVel;
-			LUTLookUp(FirstBezierLUT, FirstLUTBaseY, fLineNorm, &IGNORED, &NormalIndex);
-			
-			//LUTNormal(FirstBezierLUT, FirstLUTBaseY, fLineNorm, &CurveNormalX);
-			
-			//if(CurveNormalX == F32Max)
-			if(fLineNorm >= (1.0f + FirstLUTBaseY))
-			{
-				LUTLookUp(SecondBezierLUT, SecondLUTBaseY, fLineNorm, &IGNORED, &NormalIndex);
-				NormalLUT = SecondBezierLUTVel;
-			}
-			
-			if(NormalIndex >= 0)
-				CurveNormalX += NormalLUT[NormalIndex].x;
-		}
-		
-		
-		CurveNormalX /= 60.0f;
-		
-		//NOTE(moritz): Single sample
-		//LUTNormal(FirstBezierLUT, FirstLUTBaseY, 10.0f/255.0f, &CurveNormalX);
-		
-#if 0
-		//NOTE(moritz): Perform two look ups for normal.. one line above, one line below
-		//Normal at 10: LUT 9 and 11?
-		float X0 = 0.0f;
-		LUTLookUp(FirstBezierLUT, FirstLUTBaseY, 0.0f/255.0f, &X0);
-		
-		float X50 = 0.0f;
-		LUTLookUp(FirstBezierLUT, FirstLUTBaseY, 50.0f/255.0f, &X50);
-		
-		Vector2 LUTNormal;
-		LUTNormal.x = -(50.0f/255.0f);
-		LUTNormal.y = X50 - X0;
-		
-		CurveNormalX = Sign(X50 - X0)*NOZ(LUTNormal).x;
-#endif
-		
-		Vector2 NormalStart;
-		NormalStart.x = 0.5f*fScreenWidth;
-		NormalStart.y = fScreenHeight - 25.0f;
-		
-		Vector2 NormalEnd;
-		NormalEnd.x = NormalStart.x + CurveNormalX*30.0f;
-		NormalEnd.y = NormalStart.y;
-		
-		if(CurveNormalX < 0.0f)
-			DrawLineEx(NormalStart, NormalEnd, 4.0f, BLACK);
-		else if(CurveNormalX > 0.0f)
-			DrawLineEx(NormalStart, NormalEnd, 4.0f, PURPLE);
-		
-		
-#if 0
-		//NOTE(moritz): Visualising curve feeling section
-		Vector2 SectionStart;
-		SectionStart.x = 0.5f;
-		SectionStart.y = fScreenHeight - 165.0f;
-		
-		Vector2 SectionEnd;
-		SectionEnd.x = 0.5f;
-		SectionEnd.y = fScreenHeight - 225.0f;
-		
-		DrawLineEx(SectionStart, SectionEnd, 4.0f, YELLOW);
-#endif
-		
-		//NOTE(moritz): Region after curve feeling section
-		float FeelingSectionStartY = TWEAK(120.0f);
-		int FeelingSectionStartIndex = (int)FeelingSectionStartY;
-		
-		Vector2 LowerSectionStart;
-		LowerSectionStart.x = 0.0f;
-		LowerSectionStart.y = fScreenHeight - FeelingSectionStartY;
-		
-		Vector2 LowerSectionEnd;
-		LowerSectionEnd.x = fScreenWidth;
-		LowerSectionEnd.y = fScreenHeight - FeelingSectionStartY;
-		
-		DrawLineEx(LowerSectionStart, LowerSectionEnd, 4.0f, YELLOW);
-		
-		//NOTE(moritz):Find Upper boundary based on next inflection point (use sign of normal.x to determine..)
-		{
-			float IGNORED = 0.0f;
-			
-			Vector2 *InitialNormalLUT = FirstBezierLUTVel;
-			
-			int InitialNormalIndex = -1;
-			LUTLookUp(FirstBezierLUT, FirstLUTBaseY, FeelingSectionStartY/255.0f, &IGNORED, &InitialNormalIndex);
-			
-			if(InitialNormalIndex < 0)
-			{
-				LUTLookUp(SecondBezierLUT, SecondLUTBaseY, FeelingSectionStartY/255.0f, &IGNORED, &InitialNormalIndex);
-				InitialNormalLUT = SecondBezierLUTVel;
-			}
-			
-			float SectionSign = Sign(InitialNormalLUT[InitialNormalIndex].x);
-			
-			int SectionEnd = -1;
-			
-			for(int LineIndex = (FeelingSectionStartIndex + 1);
-				LineIndex < 225;
-				++LineIndex)
-			{
-				float fLineNorm = (float)LineIndex/255.0f;
-				
-				Vector2 *NormalLUT = FirstBezierLUTVel;
-				int NormalIndex = -1;
-				LUTLookUp(FirstBezierLUT, FirstLUTBaseY, fLineNorm, &IGNORED, &NormalIndex);
-				
-				if(NormalIndex < 0)
-				{
-					LUTLookUp(SecondBezierLUT, SecondLUTBaseY, fLineNorm, &IGNORED, &NormalIndex);
-					NormalLUT = SecondBezierLUT;
-				}
-				
-				float TestSign = Sign(NormalLUT[NormalIndex].x);
-				
-				if((TestSign != SectionSign))
-				{
-					SectionEnd = LineIndex - 1;
-					break;
-				}
-			}
-			
-			if(SectionEnd == -1)
-				SectionEnd = 224;
-			
-			float FeelingSectionEndY = (float)SectionEnd;
-			
-			Vector2 UpperSectionStart;
-			UpperSectionStart.x = 0.0f;
-			UpperSectionStart.y = fScreenHeight - FeelingSectionEndY;
-			
-			Vector2 UpperSectionEnd;
-			UpperSectionEnd.x = 0.0f;
-			UpperSectionEnd.y = fScreenHeight - FeelingSectionEndY;
-			
-			DrawLineEx(UpperSectionStart, UpperSectionStart, 4.0f, ORANGE);
-		}
-		
-		DrawText(TextFormat("CurveNormalX: %f", CurveNormalX), 20, 40, 10, RED);
-		
 		//---------------------------------------------------------
 		
 		EndDrawing();
 		
 		
 		//---------------------------------------------------------
-		ReloadSourceCode(&SourceCode, &LinkPool, &LinkList);
-		UpdateTweakTable(&LinkList);
+		//ReloadSourceCode(&SourceCode, &LinkPool, &LinkList);
+		//UpdateTweakTable(&LinkList);
 	}
 	
 	CloseWindow();
