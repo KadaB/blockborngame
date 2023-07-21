@@ -245,8 +245,8 @@ Append(link_list *List, link *Link)
 	List->Last = (List->Last ? List->Last->Next : List->First) = Link;
 }
 
-//#define TWEAK(Value) TweakValue(Value, __LINE__)
-#define TWEAK(Value) Value
+#define TWEAK(Value) TweakValue(Value, __LINE__)
+//#define TWEAK(Value) Value
 
 //NOTE(moritz): Source: https://gist.github.com/badboy/6267743 (Rober Jenkins 32 bit integer hash function)
 unsigned int
@@ -840,9 +840,9 @@ InitSegment(road_segment *Segment, road_segment *PrevSegment, random_series *Ent
 	if(PrevSegment)
 		Segment->Position = PrevSegment->Position + 1.0f;//.2f + 0.5f*RandomUnilateral(Entropy); //NOTE(moritz): Float depth map position
 	
-	float Rand = RandomBilateral(Entropy)*0.01f;
+	float Rand = RandomBilateral(Entropy)*0.005f;
 	float SignRand = Sign(Rand);
-	Segment->ddX      = 0.01f*SignRand + Rand;
+	Segment->ddX      = 0.005f*SignRand + Rand;
 }
 
 
@@ -951,7 +951,7 @@ And then the game loads in the textures with mipmaps included.
 	road_segment *InitialRoadSegment = AllocateRoadSegment(&RoadPool);
 	
 	InitialRoadSegment->Position = 0.0f;
-	InitialRoadSegment->ddX      = RandomBilateral(&RoadEntropy)*0.01f;
+	InitialRoadSegment->ddX      = RandomBilateral(&RoadEntropy)*0.005f;
 	
 	Append(&ActiveRoadList, InitialRoadSegment);
 	
@@ -989,6 +989,8 @@ And then the game loads in the textures with mipmaps included.
 		
 		float dtForFrame = GetFrameTime();
 		
+		dtForFrame *= TWEAK(1.0f);
+		
 		PlayerSpeed = TWEAK(10.0f);
 		
 		//NOTE(moritz): Update player position
@@ -997,7 +999,7 @@ And then the game loads in the textures with mipmaps included.
 		PlayerP += dPlayerP;
 		
 		//NOTE(moritz): Update active segments position
-		float RoadDelta = TWEAK(2.0f)*dPlayerP/MaxDistance;
+		float RoadDelta = TWEAK(0.0f)*dPlayerP/MaxDistance;
 		//FirstLUTBaseY  -= RoadDelta;
 		//SecondLUTBaseY -= RoadDelta;
 		
@@ -1143,8 +1145,8 @@ And then the game loads in the textures with mipmaps included.
 		
 		
 		//---------------------------------------------------------
-		//ReloadSourceCode(&SourceCode, &LinkPool, &LinkList);
-		//UpdateTweakTable(&LinkList);
+		ReloadSourceCode(&SourceCode, &LinkPool, &LinkList);
+		UpdateTweakTable(&LinkList);
 	}
 	
 	CloseWindow();
