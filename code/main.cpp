@@ -934,29 +934,27 @@ main()
 			Texture2D texture;
 		} frames[2] = { 
 			{ {11, 1}, LoadTexture("fire0.png")}, 
-			{ {22, 7}, LoadTexture("fire1.png")}
+			{ {22, 8}, LoadTexture("fire1.png")}
 		};
 
-		float frame_duration = 200;
+		float frame_duration = 0.4;
 		float runtime = 0;
-
 		float orientation = 0;
+		float scale = 3.0;
 		Vector2 position = {0, 0};
 
 		int calculate_current_frame() {
-			int a = (runtime / 200.f);
-			int b = a % 2;
-			printf("runtime = %f, a = %d, b %d\n ", runtime, a, b);
-			return ((int)(runtime / 200.f)) % 2;
+			return ((int)(runtime / frame_duration)) % 2;
 		}
 		void draw(float delta_time) {
 			runtime += delta_time;
+			orientation = runtime * PI * 20.;
 			_Frame current_frame = frames[calculate_current_frame()];
 			//DrawTextureEx(current_frame.texture, position-current_frame.anchor, 0, 1, WHITE);
 			DrawTexturePro(current_frame.texture, 
 				{0, 0, current_frame.texture.width, current_frame.texture.height}, 
-				{position.x, position.y, current_frame.texture.width, current_frame.texture.height}, 
-				current_frame.anchor, orientation, WHITE);
+				{position.x, position.y, current_frame.texture.width * scale, current_frame.texture.height * scale}, 
+				current_frame.anchor * scale, orientation, WHITE);
 		}
 
 	} fire_animation1, fire_animation2;
