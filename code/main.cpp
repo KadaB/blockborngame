@@ -842,7 +842,7 @@ InitSegment(road_segment *Segment, road_segment *PrevSegment, random_series *Ent
 	
 	float Rand = RandomBilateral(Entropy)*0.005f;
 	float SignRand = Sign(Rand);
-	Segment->ddX      = 0.005f*SignRand + Rand;
+	Segment->ddX      = 0.02f*SignRand + Rand;
 }
 
 
@@ -991,7 +991,7 @@ And then the game loads in the textures with mipmaps included.
 		
 		dtForFrame *= TWEAK(1.0f);
 		
-		PlayerSpeed = TWEAK(10.0f);
+		PlayerSpeed = TWEAK(15.0f);
 		
 		//NOTE(moritz): Update player position
 		float dPlayerP = PlayerSpeed*dtForFrame;
@@ -999,7 +999,7 @@ And then the game loads in the textures with mipmaps included.
 		PlayerP += dPlayerP;
 		
 		//NOTE(moritz): Update active segments position
-		float RoadDelta = TWEAK(0.0f)*dPlayerP/MaxDistance;
+		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
 		//FirstLUTBaseY  -= RoadDelta;
 		//SecondLUTBaseY -= RoadDelta;
 		
