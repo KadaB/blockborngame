@@ -928,6 +928,39 @@ main()
 	Texture2D cross_hair_texture = LoadTexture("crosshair.png");
 	SetTextureFilter(cross_hair_texture, TEXTURE_FILTER_BILINEAR);
 	
+	struct _FireAnimation {
+		struct _Frame {
+			Vector2 anchor;
+			Texture2D texture;
+		} frames[2] = { 
+			{ {11, 1}, LoadTexture("fire0.png")}, 
+			{ {22, 7}, LoadTexture("fire1.png")}
+		};
+
+		float frame_duration = 200;
+		float runtime = 0;
+
+		float orientation = 0;
+		Vector2 position = {0, 0};
+
+		int calculate_current_frame() {
+			int a = (runtime / 200.f);
+			int b = a % 2;
+			printf("runtime = %f, a = %d, b %d\n ", runtime, a, b);
+			return ((int)(runtime / 200.f)) % 2;
+		}
+		void draw(float delta_time) {
+			runtime += delta_time;
+			_Frame current_frame = frames[calculate_current_frame()];
+			//DrawTextureEx(current_frame.texture, position-current_frame.anchor, 0, 1, WHITE);
+			DrawTexturePro(current_frame.texture, 
+				{0, 0, current_frame.texture.width, current_frame.texture.height}, 
+				{position.x, position.y, current_frame.texture.width, current_frame.texture.height}, 
+				current_frame.anchor, orientation, WHITE);
+		}
+
+	} fire_animation1, fire_animation2;
+
 	/*
 TODO(moritz): If we want to use mipmaps for our
 billboards (I think we should), then it seems like
@@ -1249,7 +1282,9 @@ And then the game loads in the textures with mipmaps included.
 
 		// Draw the cross hair
 		
-		DrawTextureEx(cross_hair_texture, {GetMouseX()-cross_hair_texture.width/2, GetMouseY() - cross_hair_texture.height/2} , 0, 1, WHITE);
+		//DrawTextureEx(cross_hair_texture, {GetMouseX()-cross_hair_texture.width/2, GetMouseY() - cross_hair_texture.height/2} , 0, 1, WHITE);
+		fire_animation1.position = {GetMouseX(), GetMouseY()};
+		fire_animation1.draw(dtForFrame);
 		
 		//---------------------------------------------------------
 		
