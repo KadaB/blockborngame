@@ -924,7 +924,7 @@ main()
 	
 	Texture2D SunsetTexture = LoadTexture("sunset.png");
 	SetTextureFilter(SunsetTexture, TEXTURE_FILTER_BILINEAR);
-
+	
 	Texture2D cross_hair_texture = LoadTexture("crosshair.png");
 	SetTextureFilter(cross_hair_texture, TEXTURE_FILTER_BILINEAR);
 	
@@ -936,29 +936,32 @@ main()
 			{ {11, 1}, LoadTexture("fire0.png")}, 
 			{ {22, 8}, LoadTexture("fire1.png")}
 		};
-
-		float frame_duration = 0.4;
-		float runtime = 0;
-		float orientation = 0;
-		float scale = 3.0;
+		
+		float frame_duration = 0.4f;
+		float runtime = 0.0f;
+		float orientation = 0.0f;
+		float scale = 3.0f;
 		Vector2 position = {0, 0};
-
+		
 		int calculate_current_frame() {
 			return ((int)(runtime / frame_duration)) % 2;
 		}
 		void draw(float delta_time) {
 			runtime += delta_time;
-			orientation = runtime * PI * 20.;
+			orientation = runtime * PI * 20.f;
 			_Frame current_frame = frames[calculate_current_frame()];
 			//DrawTextureEx(current_frame.texture, position-current_frame.anchor, 0, 1, WHITE);
 			DrawTexturePro(current_frame.texture, 
-				{0, 0, current_frame.texture.width, current_frame.texture.height}, 
-				{position.x, position.y, current_frame.texture.width * scale, current_frame.texture.height * scale}, 
-				current_frame.anchor * scale, orientation, WHITE);
+						   {0, 0, (float)current_frame.texture.width, (float)current_frame.texture.height}, 
+						   {position.x, position.y, (float)current_frame.texture.width * scale, (float)current_frame.texture.height * scale}, 
+						   current_frame.anchor * scale, orientation, WHITE);
 		}
-
+		
 	} fire_animation1, fire_animation2;
-
+	
+	SetTextureWrap(fire_animation1.frames[0].texture, TEXTURE_WRAP_CLAMP);
+	SetTextureWrap(fire_animation1.frames[1].texture, TEXTURE_WRAP_CLAMP);
+	
 	/*
 TODO(moritz): If we want to use mipmaps for our
 billboards (I think we should), then it seems like
@@ -1127,7 +1130,7 @@ And then the game loads in the textures with mipmaps included.
 			PlayerBaseXOffset += Max(dPlayerP*SteerFactor, MinSteering);
 		if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
 			PlayerBaseXOffset -= Max(dPlayerP*SteerFactor, MinSteering);
-
+		
 		//NOTE(moritz): Update active segments position
 		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
 		
@@ -1277,11 +1280,11 @@ And then the game loads in the textures with mipmaps included.
 		DrawRectangleV(TestP, TestSize, PURPLE);
 		
 #endif
-
+		
 		// Draw the cross hair
 		
 		//DrawTextureEx(cross_hair_texture, {GetMouseX()-cross_hair_texture.width/2, GetMouseY() - cross_hair_texture.height/2} , 0, 1, WHITE);
-		fire_animation1.position = {GetMouseX(), GetMouseY()};
+		fire_animation1.position = {(float)GetMouseX(), (float)GetMouseY()};
 		fire_animation1.draw(dtForFrame);
 		
 		//---------------------------------------------------------
