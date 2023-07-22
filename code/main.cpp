@@ -341,9 +341,9 @@ ReloadSourceCode(char **SourceCode, link_pool *LinkPool, link_list *LinkList)
 	//TODO(moritz): Clear hashtable as well?
 	
 	while((*SourceCode) == 0)
-		*SourceCode = LoadFileText("..\\code\\main.cpp");
+		*SourceCode = LoadFileText("../code/main.cpp");
 	
-	int SourceCodeByteCount = GetFileLength("..\\code\\main.cpp") + 1;
+	int SourceCodeByteCount = GetFileLength("../code/main.cpp") + 1;
 	
 	unsigned int LineCount = 0;
 	
@@ -899,6 +899,7 @@ main()
 	InitWindow(ScreenWidth, ScreenHeight, "raylib");
 	SetTargetFPS(60);
 	
+	HideCursor();
 	//---------------------------------------------------------
 	
 	//NOTE(moritz): Load source code for tweak variables
@@ -920,6 +921,9 @@ main()
 	
 	Texture2D SunsetTexture = LoadTexture("sunset.png");
 	SetTextureFilter(SunsetTexture, TEXTURE_FILTER_BILINEAR);
+
+	Texture2D cross_hair_texture = LoadTexture("crosshair.png");
+	SetTextureFilter(cross_hair_texture, TEXTURE_FILTER_BILINEAR);
 	
 	/*
 TODO(moritz): If we want to use mipmaps for our
@@ -1054,9 +1058,9 @@ And then the game loads in the textures with mipmaps included.
 		
 		float PlayerAcceleration = TWEAK(10.0f)*dtForFrame;
 		
-		if(IsKeyDown(KEY_UP))
+		if(IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
 			PlayerSpeed += PlayerAcceleration;
-		if(IsKeyDown(KEY_DOWN))
+		if(IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
 			PlayerSpeed -= PlayerAcceleration;
 		
 		if(PlayerSpeed <= 0.0f)
@@ -1085,11 +1089,11 @@ And then the game loads in the textures with mipmaps included.
 		float MinSteering = TWEAK(10.0f);
 		
 		float SteerFactor = Lerp(MaxSteerFactor, SteerFactorT, MinSteerFactor);
-		if(IsKeyDown(KEY_LEFT))
+		if(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
 			PlayerBaseXOffset += Max(dPlayerP*SteerFactor, MinSteering);
-		if(IsKeyDown(KEY_RIGHT))
+		if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
 			PlayerBaseXOffset -= Max(dPlayerP*SteerFactor, MinSteering);
-		
+
 		//NOTE(moritz): Update active segments position
 		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
 		
@@ -1239,6 +1243,10 @@ And then the game loads in the textures with mipmaps included.
 		DrawRectangleV(TestP, TestSize, PURPLE);
 		
 #endif
+
+		// Draw the cross hair
+		
+		DrawTextureEx(cross_hair_texture, {GetMouseX()-cross_hair_texture.width/2, GetMouseY() - cross_hair_texture.height/2} , 0, 1, WHITE);
 		
 		//---------------------------------------------------------
 		
