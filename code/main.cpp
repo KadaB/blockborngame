@@ -650,14 +650,17 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	float dX = 0.0f;
 	float fCurrentCenterOffsetX = 0.0f;
 	
+	//int DepthSampleIndex = 0;
+	float DepthSampleIndex = 0.0f;
+	
 	for(int DepthLineIndex = 0;
 		DepthLineIndex < DepthLineCount;
-		++DepthLineIndex)
+		++DepthLineIndex, DepthSampleIndex += 0.9f)
 	{
 		float fLineY = (float)DepthLineIndex;
 		
-		float fRoadWidth   = BaseRoadHalfWidth*DepthLines[DepthLineIndex].Scale + 20.0f;
-		float fStripeWidth = BaseStripeHalfWidth*DepthLines[DepthLineIndex].Scale;
+		float fRoadWidth   = BaseRoadHalfWidth*DepthLines[(int)DepthSampleIndex/*DepthLineIndex*/].Scale + 20.0f;
+		float fStripeWidth = BaseStripeHalfWidth*DepthLines[(int)DepthSampleIndex/*DepthLineIndex*/].Scale;
 		
 		float fYLineNorm = fLineY/fDepthLineCount;
 		
@@ -679,7 +682,7 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		
 		float fCurrentCenterX = 0.5f*fScreenWidth + fCurrentCenterOffsetX + SteerOffset;
 		
-		float RoadWorldZ = DepthLines[DepthLineIndex].Depth*MaxDistance + Offset;
+		float RoadWorldZ = DepthLines[(int)DepthSampleIndex/*DepthLineIndex*/].Depth*MaxDistance + Offset;
 		
 		Color GrassColor = { 44,  78, 154, 255};
 		Color RoadColor  = { 15,   0,  30, 255};
