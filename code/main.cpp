@@ -162,6 +162,31 @@ Lerp(Vector2 A, float t, Vector2 B)
 	return(Result);
 }
 
+Color
+Lerp(Color A, float t, Color B)
+{
+	float Ar = (float)A.r;
+	float Ag = (float)A.g;
+	float Ab = (float)A.b;
+	
+	float Br = (float)B.r;
+	float Bg = (float)B.g;
+	float Bb = (float)B.b;
+	
+	float Rr = Lerp(Ar, t, Br);
+	float Rg = Lerp(Ag, t, Bg);
+	float Rb = Lerp(Ab, t, Bb);
+	
+	Color Result;
+	Result.a = 255;
+	
+	Result.r = (unsigned char)(floorf(Rr + 1.0f));
+	Result.g = (unsigned char)(floorf(Rg + 1.0f));
+	Result.b = (unsigned char)(floorf(Rb + 1.0f));
+	
+	return(Result);
+}
+
 struct road_segment
 {
 	//float Length;
@@ -281,6 +306,11 @@ float
 TweakValue(float Value, unsigned int LineNumber)
 {
 	unsigned int Index = UIntHash(LineNumber) % TWEAK_TABLE_SIZE;
+	
+	//NOTE(moritz): Linear probing (I guess). In case of collision
+	while(TweakTable[Index].IsInitialised && 
+		  (TweakTable[Index].LineNumber != LineNumber))
+		Index = (Index + 1) % TWEAK_TABLE_SIZE;
 	
 	if(!TweakTable[Index].IsInitialised)
 	{
@@ -604,11 +634,13 @@ RandomBilateral(random_series *Series)
 
 void
 DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeight, depth_line *DepthLines,
-		 int DepthLineCount, road_list *ActiveRoadList/*Vector2 *FirstBezierLUT, Vector2 *SecondBezierLUT, float FirstLUTBaseY, float SecondLUTBaseY*/)
+		 int DepthLineCount, road_list *ActiveRoadList, float PlayerBaseXOffset)
 {
 	float fDepthLineCount = (float)DepthLineCount;
 	float BaseRoadHalfWidth = fScreenWidth*0.6f;
 	float BaseStripeHalfWidth = 20.0f;
+	
+	float AngleOfRoad = PlayerBaseXOffset/fDepthLineCount;
 	
 	float Offset = PlayerP;
 	if(Offset > 8.0f)
@@ -616,7 +648,7 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	
 	road_segment *CurrentSegment = ActiveRoadList->First;
 	float dX = 0.0f;
-	float fCurrentCenterX = 0.5f*fScreenWidth;
+	float fCurrentCenterOffsetX = 0.0f;
 	
 	for(int DepthLineIndex = 0;
 		DepthLineIndex < DepthLineCount;
@@ -636,58 +668,32 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		}
 		
 		dX += CurrentSegment->ddX;
-		fCurrentCenterX += dX;
+		fCurrentCenterOffsetX += dX;
 		
-#if 0
-		float fCurrentCenterX = F32Max;
-		
-		int IGNORED = -1;
-		
-		LUTLookUp(FirstBezierLUT, FirstLUTBaseY, fYLineNorm, &fCurrentCenterX, &IGNORED);
-		
-		if(fCurrentCenterX == F32Max)
-			LUTLookUp(SecondBezierLUT, SecondLUTBaseY, fYLineNorm, &fCurrentCenterX, &IGNORED);
-#endif
-		
-#if 0
-		//NOTE(moritz): Depth based damping
-		//Probably too much
-		float PerspectiveCurveDamping = sinf( (DepthLines[DepthLineIndex].Depth + TWEAK(0.008f)) * 0.5f*Pi32);
-		PerspectiveCurveDamping = Clamp(0.0f, PerspectiveCurveDamping, 1.0f);
-		fCurrentCenterX = 0.5f*fScreenWidth + PerspectiveCurveDamping*fCurrentCenterX*0.5f*fScreenWidth;
-#else
 		//NOTE(moritz): Made up damping... Seems better
-		//float CurveDamping = sinf(fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*0.5f*Pi32);
-		//fYLineNorm -= 0.05f; //NOTE(moritz): This just some fuding for the damping
-		//float CurveDamping = sinf(fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*fYLineNorm*0.5f*Pi32);
 		float CurveDamping = sinf(fYLineNorm*0.5f*Pi32);
 		CurveDamping = Clamp(0.0f, CurveDamping, 1.0f);
-		//fCurrentCenterX = 0.5f*fScreenWidth + CurveDamping*fCurrentCenterX*0.5f*fScreenWidth;
+		fCurrentCenterOffsetX *= CurveDamping;
 		
-		float CurrentCenterDelta = fCurrentCenterX - 0.5f*fScreenWidth;
+		float SteerOffset = AngleOfRoad*(fDepthLineCount - fLineY);
 		
-		fCurrentCenterX = 0.5f*fScreenWidth + CurveDamping*CurrentCenterDelta;//fCurrentCenterX*0.5f*fScreenWidth;
-#endif
+		float fCurrentCenterX = 0.5f*fScreenWidth + fCurrentCenterOffsetX + SteerOffset;
 		
 		float RoadWorldZ = DepthLines[DepthLineIndex].Depth*MaxDistance + Offset;
 		
-		Color GrassColor = { 44,  78, 154, 255};//GREEN;
-		Color RoadColor  = { 15,   0,  30, 255};//DARKGRAY;
+		Color GrassColor = { 44,  78, 154, 255};
+		Color RoadColor  = { 15,   0,  30, 255};
 		
 		if(fmod(RoadWorldZ, 8.0f) > 4.0f)
 		{
-			//GrassColor = DARKGREEN;
 			GrassColor = BLANK;
-			//RoadColor  = GRAY;
 			RoadColor  = { 30,  25,  40, 255};
 		}
 		
-#if 1
 		//NOTE(moritz):Draw grass line first... draw road on top... 
 		Vector2 GrassStart = {0.0f, fScreenHeight - fLineY - 0.5f};
 		Vector2 GrassEnd   = {fScreenWidth, fScreenHeight - fLineY - 0.5f};
 		DrawLineV(GrassStart, GrassEnd, GrassColor);
-#endif
 		
 		//NOTE(moritz): Draw road
 		Vector2 RoadStart = {fCurrentCenterX - fRoadWidth, fScreenHeight - fLineY - 0.5f};
@@ -973,10 +979,11 @@ And then the game loads in the textures with mipmaps included.
 	float PlayerSpeed = 0.0f;
 	float PlayerP     = 0.0f;
 	
+	float PlayerBaseXOffset = 0.0f;
+	
 	//---------------------------------------------------------
 	//NOTE(moritz): Background gradients
 	Color SkyGradientCol0 = { 29,   9,  49, 255};
-	//Color SkyGradientCol1 = {130,  40,  39, 255};
 	Color SkyGradientCol1 = {198,  37,  32, 255};
 	
 	Color GrassGradientCol0 = { 51,   4, 104, 255};
@@ -1002,7 +1009,8 @@ And then the game loads in the textures with mipmaps included.
 	InitialRoadSegment->ddX      = 2.0f*(InitialRoadSegment->EndRelPX)/(MaxDistance*(MaxDistance + 1.0f));
 #endif
 	
-	InitialRoadSegment->ddX = RoadPresets[XORShift32(&RoadEntropy) % ArrayCount(RoadPresets)];
+	//InitialRoadSegment->ddX = RoadPresets[XORShift32(&RoadEntropy) % ArrayCount(RoadPresets)];
+	InitialRoadSegment->ddX = 0.0f;
 	
 	Append(&ActiveRoadList, InitialRoadSegment);
 	
@@ -1042,18 +1050,48 @@ And then the game loads in the textures with mipmaps included.
 		
 		dtForFrame *= TWEAK(1.0f);
 		
-		PlayerSpeed = TWEAK(20.0f);
+		//PlayerSpeed = TWEAK(20.0f);
+		
+		float PlayerAcceleration = TWEAK(10.0f)*dtForFrame;
+		
+		if(IsKeyDown(KEY_UP))
+			PlayerSpeed += PlayerAcceleration;
+		if(IsKeyDown(KEY_DOWN))
+			PlayerSpeed -= PlayerAcceleration;
+		
+		if(PlayerSpeed <= 0.0f)
+			PlayerSpeed = 0.0f;
+		
+		float SpeedDragForce = TWEAK(0.0125f)*PlayerSpeed*PlayerSpeed*dtForFrame;
+		
+		PlayerSpeed -= SpeedDragForce;
+		
+		if(fabs(PlayerSpeed) < TWEAK(0.15f))
+			PlayerSpeed = 0.0f;
 		
 		//NOTE(moritz): Update player position
 		float dPlayerP = PlayerSpeed*dtForFrame;
 		//TODO(moritz): Floating point precision for PlayerP
 		PlayerP += dPlayerP;
 		
+		float MaxSteerFactor = TWEAK(80.0f);
+		float MinSteerFactor = TWEAK(30.0f);
+		
+		
+		//NOTE(moritz): Max speed is currently like ~25.0f
+		float SteerFactorT = (PlayerSpeed/28.0f);
+		SteerFactorT = Clamp(0.0f, SteerFactorT, 1.0f);
+		
+		float MinSteering = TWEAK(10.0f);
+		
+		float SteerFactor = Lerp(MaxSteerFactor, SteerFactorT, MinSteerFactor);
+		if(IsKeyDown(KEY_LEFT))
+			PlayerBaseXOffset += Max(dPlayerP*SteerFactor, MinSteering);
+		if(IsKeyDown(KEY_RIGHT))
+			PlayerBaseXOffset -= Max(dPlayerP*SteerFactor, MinSteering);
+		
 		//NOTE(moritz): Update active segments position
-		float RoadDelta = TWEAK(2.0f)*dPlayerP/MaxDistance;
-
-		//FirstLUTBaseY  -= RoadDelta;
-		//SecondLUTBaseY -= RoadDelta;
+		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
 		
 		for(road_segment *Segment = ActiveRoadList.First;
 			Segment;
@@ -1064,14 +1102,12 @@ And then the game loads in the textures with mipmaps included.
 		
 		//NOTE(moritz): Road segment tweaking
 		//ActiveRoadList.First->ddX = TWEAK(0.1f);
-		
 #if 0
 		ActiveRoadList.First->EndRelPX = TWEAK(1300.0f);
 		ActiveRoadList.First->ddX      = 2.0f*(ActiveRoadList.First->EndRelPX)/(MaxDistance*(MaxDistance + 1.0f));
 #endif
 		
 		
-#if 1
 		if(ActiveRoadList.Last->Position < 1.0f)
 		{
 			road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
@@ -1081,8 +1117,7 @@ And then the game loads in the textures with mipmaps included.
 			Append(&ActiveRoadList, NewSegment);
 		}
 		
-		//TODO(moritz): Set new base segment and generate new segment
-		//if((SecondLUTBaseY < 0.0f) && SecondBaseWrapped)
+		//NOTE(moritz): Set new base segment and generate new segment
 		if(ActiveRoadList.First->Next->Position <= 0.0f)
 		{
 			DeleteHeadSegment(&ActiveRoadList, &RoadPool);
@@ -1096,23 +1131,13 @@ And then the game loads in the textures with mipmaps included.
 			FirstBaseWrapped = true;
 		}
 		
-#if 0
-		//TODO(moritz): If last segment < horizon. Add new segment...
-		//if(ActiveRoadList.Last->End.y < 1.0f)
-		if((FirstLUTBaseY < 0.0f) && FirstBaseWrapped)
-		{
-			FirstBaseWrapped = false;
-			
-			road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
-			
-			InitSegment(NewSegment, &RoadEntropy);
-			
-			Append(&ActiveRoadList, NewSegment);
-		}
-#endif
+		float CurveForceT = 1.0f - ActiveRoadList.First->Next->Position;;
 		
-#endif
+		CurveForceT = Clamp(0.0f, CurveForceT, 1.0f);
 		
+		float CurveForce = PlayerSpeed*TWEAK(50.0f)*Lerp(ActiveRoadList.First->ddX, CurveForceT, ActiveRoadList.First->Next->ddX);
+		
+		PlayerBaseXOffset += CurveForce;
 		
 		//NOTE(moritz): Update billboard positions
 		TreeDistance -= dPlayerP;
@@ -1135,8 +1160,7 @@ And then the game loads in the textures with mipmaps included.
 							   GrassGradientCol0, GrassGradientCol1);
 		
 		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-				 &ActiveRoadList/*,FirstBezierLUT, SecondBezierLUT, FirstLUTBaseY, SecondLUTBaseY*/);
-		
+				 &ActiveRoadList, PlayerBaseXOffset);
 		
 		//NOTE(moritz): Draw player car
 		Vector2 PlayerCarP = 
@@ -1146,7 +1170,6 @@ And then the game loads in the textures with mipmaps included.
 		};
 		DrawTextureEx(CarTexture, PlayerCarP, 0.0f, 1.0f, WHITE);
 		
-#if 0
 		//NOTE(moritz): Visualise where the segments are at...
 		for(road_segment *Segment = ActiveRoadList.First;
 			Segment;
@@ -1159,11 +1182,14 @@ And then the game loads in the textures with mipmaps included.
 			MarkerStart.y = fScreenHeight - SegmentY*MaxDistance;
 			
 			Vector2 MarkerEnd = MarkerStart;
-			MarkerEnd.x = fScreenWidth;
+			MarkerEnd.x       = fScreenWidth;
 			
-			DrawLineEx(MarkerStart, MarkerEnd, 4.0f, ORANGE);
+			Color LineColor = ORANGE;
+			if(Segment == ActiveRoadList.First->Next)
+				LineColor = Lerp(ORANGE, CurveForceT, RED);
+			
+			DrawLineEx(MarkerStart, MarkerEnd, 4.0f, LineColor);
 		}
-#endif
 		
 		
 #if 0
@@ -1176,7 +1202,6 @@ And then the game loads in the textures with mipmaps included.
 		
 		//NOTE(moritz): Debug stuff
 		float TestX = fScreenWidth*0.5f + 0.5f;
-		
 #if 0
 		float TestdX = 0.0f;
 		road_segment CurrentSegment = BottomSegment;
@@ -1195,7 +1220,6 @@ And then the game loads in the textures with mipmaps included.
 		}
 		
 		float OtherTestX = fScreenWidth*0.5f + 0.5f;
-		
 		OtherTestX += BottomSegment.ddX*( (NextSegment.Position*(NextSegment.Position + 1.0f))*0.5f );
 		float TestXAt = fDepthLineCount - NextSegment.Position;
 		OtherTestX += NextSegment.ddX*( (TestXAt*(TestXAt + 1.0f))*0.5f );
@@ -1215,6 +1239,11 @@ And then the game loads in the textures with mipmaps included.
 		DrawRectangleV(TestP, TestSize, PURPLE);
 		
 #endif
+		
+		//---------------------------------------------------------
+		
+		DrawText(TextFormat("PlayerSpeed: %f", PlayerSpeed), 20, 20, 10, RED);
+		DrawText(TextFormat("SteerFactor: %f", SteerFactor), 20, 30, 10, RED);
 		
 		//---------------------------------------------------------
 		
