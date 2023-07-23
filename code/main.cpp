@@ -1314,7 +1314,9 @@ And then the game loads in the textures with mipmaps included.
 			lenkVelocity = Min(lenkVelocity, 0) - lenkAcceleration;
 		}
 		else {
-			lenkVelocity += -1*Sign(lenkVelocity)*lenkAcceleration ;
+			const float zero_epsilon = 1e-3f;
+			lenkVelocity += -1*Sign(lenkVelocity)*lenkAcceleration;
+			lenkVelocity = abs(lenkVelocity) < zero_epsilon ? 0.f : lenkVelocity;
 		}
 		
 		lenkVelocity = Clamp(-max_steer, lenkVelocity, max_steer);
