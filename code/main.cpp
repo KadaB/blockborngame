@@ -1163,12 +1163,13 @@ main()
 			runtime += delta_time;
 
 			if(runtime < animation_length) {
-				float animation_runtime = ClampM(0, animation_length, runtime);
-				float factor = 1. - pow((animation_runtime / animation_length), 2);
-				float cur_length = spread * factor;
-				DrawTriangle(*start_position, end_position + normal*cur_length, end_position - normal*cur_length, {255, 0, 0, 80});
-				DrawTriangle(*start_position, end_position + normal*cur_length*.4, end_position - normal*cur_length*.4, {255, 0, 0, 80});
-
+				if(runtime > .1) {
+					float animation_runtime = ClampM(0, animation_length, runtime);
+					float factor = 1. - pow((animation_runtime / animation_length), 2);
+					float cur_length = spread * factor;
+					DrawTriangle(*start_position, end_position + normal*cur_length, end_position - normal*cur_length, {255, 0, 0, 80});
+					DrawTriangle(*start_position, end_position + normal*cur_length*.4, end_position - normal*cur_length*.4, {255, 0, 0, 80});
+				}
 				DrawLineEx(*start_position, end_position, 5, {255, 0, 0, 220});
 			}
 			else {
