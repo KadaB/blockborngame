@@ -19,7 +19,9 @@
 
 #define CAR_TILT 15.f
 
-#define WEB_BUILD
+//#define WEB_BUILD
+
+#define THINGS_PER_BAND 16
 
 struct tweak_entry
 {
@@ -757,10 +759,17 @@ struct billboard
 
 struct thing
 {
+	bool IsDriving; //NOTE(moritz): Is driving on road
+	
 	float Distance;
 	float XOffset;
 	
-	float RoadSide; //NOTE(moritz): -1: left, 1: right
+	float Speed;
+	
+	//NOTE(moritz): Only relevant for roadside decoration
+	float RoadSide; //NOTE(moritz): -1: left, 1: right.. 0: vehicle?
+	
+	Color Tint;
 	
 	billboard *Billboard;
 };
@@ -778,8 +787,8 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 	if(Thing->Distance > MaxDistance)
 		return;
 	
-	if(Thing->RoadSide == -1.0f)
-		int Foo = 0;
+	//if(Thing->RoadSide == -1.0f)
+	//int Foo = 0;
 	
 	//NOTE(moirtz): Test for "scaling in" distant billboards instead of popping them in...
 	//float ScaleInDistance = 10.0f;
@@ -840,7 +849,8 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 	//NOTE(moritz): Where the sprite will be at the bottom of the Road
 	//float BasePOffsetX = BaseRoadHalfWidth + 300.0f + 0.5f*((float)Texture.width);
 	
-	Texture2D CurrentTexture;
+	//NOTE(moritz): In case of vehicle either left or right is fine
+	Texture2D CurrentTexture = Billboard->TextureRight;
 	
 	if(Thing->RoadSide == -1.0f)
 		CurrentTexture = Billboard->TextureLeft;
@@ -914,7 +924,7 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 	SpriteDrawP.x = BaseP.x - 0.5f*((float)CurrentTexture.width)*DepthScale*SpriteScale*ScaleInT;
 	SpriteDrawP.y = BaseP.y - ((float)CurrentTexture.height)*DepthScale*SpriteScale*ScaleInT + SpriteVerticalTweak*(float)CurrentTexture.height*DepthScale*SpriteScale*ScaleInT;
 	
-	DrawTextureEx(CurrentTexture, SpriteDrawP, 0.0f, DepthScale*SpriteScale*ScaleInT, WHITE);
+	DrawTextureEx(CurrentTexture, SpriteDrawP, 0.0f, DepthScale*SpriteScale*ScaleInT, Thing->Tint/*WHITE*/);
 	
 #if 0
 	//NOTE(moritz): Debug vis
@@ -1024,6 +1034,9 @@ main()
 	
 	Texture2D cross_hair_texture = LoadTexture("crosshair.png");
 	SetTextureFilter(cross_hair_texture, TEXTURE_FILTER_BILINEAR);
+	
+	Texture2D CivilianTexture = LoadTexture("civil_car.png");
+	SetTextureFilter(CivilianTexture, TEXTURE_FILTER_BILINEAR);
 	
 	struct _dithered_horizon {
 		Vector2 position = {0, 0};
@@ -1318,6 +1331,12 @@ And then the game loads in the textures with mipmaps included.
 	LanternSprite.TextureLeft = LanternLeftTexture;
 	LanternSprite.TextureRight = LanternRightTexture;
 	
+	billboard CivilianSprite;
+	CivilianSprite.SpriteScale = 1.2f;
+	CivilianSprite.SpriteVerticalTweak = 0.1f;
+	CivilianSprite.TextureRight = CivilianTexture;
+	CivilianSprite.TextureLeft = CivilianTexture;
+	
 	//NOTE(moritz): Side bands.. 4?  32 per side band? times two for left/ right side
 	thing Things[256] = {};
 	
@@ -1325,19 +1344,23 @@ And then the game loads in the textures with mipmaps included.
 	
 	//NOTE(moritz): Init things...
 	
+	int ThingsPerSide = THINGS_PER_BAND*4;
+	
 	//NOTE(moritz): Right side
 	float CurrentDistance = MaxDistance;
 	for(int ThingIndex = 0;
-		ThingIndex < (ArrayCount(Things)/2);
+		ThingIndex < ThingsPerSide;
 		++ThingIndex)
 	{
-		SideBandIndex = ThingIndex/32;
+		SideBandIndex = ThingIndex/THINGS_PER_BAND;
 		
 		float fSideBand = (float)SideBandIndex; //0 is lamps
 		
 		Things[ThingIndex].Distance = CurrentDistance;
 		
 		Things[ThingIndex].RoadSide = 1.0f;
+		
+		Things[ThingIndex].Tint = WHITE;
 		
 		if(SideBandIndex == 0)
 			Things[ThingIndex].Billboard = &LanternSprite;
@@ -1351,21 +1374,23 @@ And then the game loads in the textures with mipmaps included.
 		CurrentDistance -= DistanceSpacing;
 		
 		//NOTE(moritz): Prep next band filling
-		if(((ThingIndex + 1)/32) > SideBandIndex)
+		if(((ThingIndex + 1)/THINGS_PER_BAND) > SideBandIndex)
 			CurrentDistance = MaxDistance;
 	}
 	
 	//NOTE(moritz): Left side
 	SideBandIndex = 0;
-	int ThingIndexOffset = ArrayCount(Things)/2;
+	int ThingIndexOffset = ThingsPerSide;
 	CurrentDistance = MaxDistance;
-	for(int ThingIndex = (ArrayCount(Things)/2);
-		ThingIndex < ArrayCount(Things);
+	for(int ThingIndex = ThingsPerSide;
+		ThingIndex < (2*ThingsPerSide);
 		++ThingIndex)
 	{
-		SideBandIndex = (ThingIndex - ThingIndexOffset)/32;
+		SideBandIndex = (ThingIndex - ThingIndexOffset)/THINGS_PER_BAND;
 		
 		float fSideBand = (float)SideBandIndex; //0 is lamps
+		
+		Things[ThingIndex].Tint = WHITE;
 		
 		Things[ThingIndex].RoadSide = -1.0f;
 		Things[ThingIndex].Distance = CurrentDistance;
@@ -1382,9 +1407,19 @@ And then the game loads in the textures with mipmaps included.
 		CurrentDistance -= DistanceSpacing;
 		
 		//NOTE(moritz): Prep next band filling
-		if(((ThingIndex + 1 - ThingIndexOffset)/32) > SideBandIndex)
+		if(((ThingIndex + 1 - ThingIndexOffset)/THINGS_PER_BAND) > SideBandIndex)
 			CurrentDistance = MaxDistance;
 	}
+	
+	//NOTE(moritz): Civilian car
+	int CarIndex = 2*ThingsPerSide;
+	Things[CarIndex].Billboard = &CivilianSprite;
+	Things[CarIndex].Speed     = 10.0f;
+	Things[CarIndex].Distance  = 20.0f;
+	Things[CarIndex].XOffset   = 200.0f;
+	Things[CarIndex].Tint      = WHITE;
+	
+	int NumberOfThings = CarIndex + 1;
 	
 	//---------------------------------------------------------
 	
@@ -1404,7 +1439,6 @@ And then the game loads in the textures with mipmaps included.
 	
 	
 	//---------------------------------------------------------
-	
 	
 	road_pool RoadPool      = {};
 	road_list ActiveRoadList = {};
@@ -1455,8 +1489,8 @@ And then the game loads in the textures with mipmaps included.
 #if 0
 		//NOTE(moritz): Sprite tweaking station
 		{
-			LanternSprite.SpriteScale = TWEAK(2.0f);
-			LanternSprite.SpriteVerticalTweak = TWEAK(0.05f);
+			CivilianSprite.SpriteScale = TWEAK(1.2f);
+			CivilianSprite.SpriteVerticalTweak = TWEAK(0.1f);
 		}
 #endif
 		
@@ -1598,10 +1632,10 @@ And then the game loads in the textures with mipmaps included.
 #endif
 		//NOTE(moritz): Update thing positions
 		for(int ThingIndex = 0;
-			ThingIndex < ArrayCount(Things);
+			ThingIndex < NumberOfThings;
 			++ThingIndex)
 		{
-			Things[ThingIndex].Distance -= dPlayerP;
+			Things[ThingIndex].Distance += -dPlayerP + Things[ThingIndex].Speed*dtForFrame;
 			
 			if(Things[ThingIndex].Distance < 0.0f)
 				Things[ThingIndex].Distance = MaxDistance;
@@ -1610,13 +1644,13 @@ And then the game loads in the textures with mipmaps included.
 		//NOTE(moritz): Sort thing positions back to front
 		bool SwapHappened = false;
 		for(int Outer = 0;
-			Outer < ArrayCount(Things);
+			Outer < NumberOfThings;
 			++Outer)
 		{
 			SwapHappened = false;
 			
 			for(int Inner = 0;
-				Inner < (ArrayCount(Things) - 1);
+				Inner < (NumberOfThings - 1);
 				++Inner)
 			{
 				thing *EntryA = Things + Inner;
@@ -1666,12 +1700,13 @@ And then the game loads in the textures with mipmaps included.
 #endif
 		//NOTE(moritz): Draw things/billboards
 		for(int ThingIndex = 0;
-			ThingIndex < ArrayCount(Things);
+			ThingIndex < NumberOfThings;
 			++ThingIndex)
 		{
-			DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex,
-						  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-						  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
+			if(Things[ThingIndex].Distance > 0.0f)
+				DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex,
+							  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
+							  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
 		}
 		
 		//NOTE(moritz): Draw player car
