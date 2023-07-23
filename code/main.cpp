@@ -903,6 +903,21 @@ InitSegment(road_segment *Segment, road_segment *PrevSegment, random_series *Ent
 }
 
 
+bool isImageClicked(const Vector2 & image_position, const Image & query_image) {
+	Vector2 in_image_pos = GetMousePosition() - image_position;
+
+	if(in_image_pos.x >= 0 && in_image_pos.x < query_image.width
+		&& in_image_pos.y >= 0 && in_image_pos.y < query_image.height) {
+		// look into image data
+		Color color = GetImageColor(query_image, in_image_pos.x, in_image_pos.y);
+
+		if(color.a > 128) {
+			return true;
+		}
+	}
+	return false;
+}
+
 int
 main()
 {
@@ -954,6 +969,7 @@ main()
 	
 	Texture2D SunsetTexture = LoadTexture("sunset.png");
 	SetTextureFilter(SunsetTexture, TEXTURE_FILTER_BILINEAR);
+	Image SunImage = LoadImageFromTexture(SunsetTexture);  
 	
 	Texture2D cross_hair_texture = LoadTexture("crosshair.png");
 	SetTextureFilter(cross_hair_texture, TEXTURE_FILTER_BILINEAR);
@@ -1073,6 +1089,7 @@ main()
 		float orientation = 0.f;
 		float scale = 1.f;
 		Texture2D texture = LoadTexture("car_plain.png");
+		Vector2 anchor = {75, 68};
 		
 		float runtime = 0.f;
 		float lift_amount = 5;
@@ -1089,8 +1106,6 @@ main()
 				rlPopMatrix();
 			}
 		} shadow;
-		
-		Vector2 anchor = {75, 68};
 		
 		_FireAnimation fire_animation1 = {7, 72 };
 		_FireAnimation fire_animation2 = {142, 72};
@@ -1129,6 +1144,48 @@ main()
 	
 	SetTextureWrap(car.fire_animation2.frames[0].texture, TEXTURE_WRAP_CLAMP);
 	SetTextureWrap(car.fire_animation2.frames[1].texture, TEXTURE_WRAP_CLAMP);
+
+	struct _Lazer {
+		Vector2 start_position = {0.f, 0.f};
+		Vector2 end_position = {0.f, 0.f};
+
+		Vector2 normal = {0, 0};
+		float runtime = 0.f;
+		float spread = 50.f;
+		float animation_length = .5f;
+
+		bool isRunning = false;
+
+		void start(Vector2 start_pos, Vector2 end_pos) {
+			start_position = start_pos;
+			end_position = end_pos;
+			Vector2 line = NOZ(end_position - start_position);		
+			normal = {-line.y, line.x};
+
+			runtime = 0;
+			isRunning = true;
+		}
+
+		void draw(float delta_time) {
+			if(!isRunning) return;
+
+			runtime += delta_time;
+
+			if(runtime < animation_length) {
+				float animation_runtime = Clamp(0, animation_length, runtime);
+				float factor = 1. - pow((animation_runtime / animation_length), 2);
+				float cur_length = spread * factor;
+				DrawTriangle(start_position, end_position + normal*cur_length, end_position - normal*cur_length, {255, 0, 0, 80});
+				DrawTriangle(start_position, end_position + normal*cur_length*.4, end_position - normal*cur_length*.4, {255, 0, 0, 80});
+
+				DrawLineEx(start_position, end_position, 5, {255, 0, 0, 220});
+			}
+			else {
+			  isRunning = false;
+				runtime = 0;
+			}
+		}
+	} lazer;
 	
 	/*
 TODO(moritz): If we want to use mipmaps for our
@@ -1416,7 +1473,22 @@ And then the game loads in the textures with mipmaps included.
 			0.5f*fScreenWidth, // - 0.5f*(float)CarTexture.width,
 			fScreenHeight - 60.0f // - (float)CarTexture.height
 		};
-		// DrawTextureEx(CarTexture, PlayerCarP, 0.0f, 1.0f, WHITE);
+
+		// Draw the cross hair
+		crosshair.position = GetMousePosition();
+		crosshair.draw(dtForFrame);
+		bool isLeftPressed = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
+
+		bool inImage = isImageClicked(SunsetP, SunImage);
+		crosshair.state = inImage ? 1 : 0;
+
+		if(isLeftPressed && inImage) {
+			if(!lazer.isRunning) {
+				lazer.start(PlayerCarP + (Vector2){0, -60}, GetMousePosition());
+			}
+		}
+		lazer.draw(dtForFrame);
+
 		car.position = PlayerCarP;
 		car.draw(dtForFrame);
 		
@@ -1443,14 +1515,6 @@ And then the game loads in the textures with mipmaps included.
 			DrawLineEx(MarkerStart, MarkerEnd, 4.0f, LineColor);
 		}
 #endif
-		
-		// Draw the cross hair
-		
-		// Vector2 crosshair_anchor = {cross_hair_texture.width / 2.f, cross_hair_texture.height / 2.f};
-		// wTextureEx(cross_hair_texture, crosshair_pos - crosshair_anchor , 0, 1, WHITE);
-
-		crosshair.position = {(float) GetMouseX(), (float) GetMouseY()};
-		crosshair.draw(dtForFrame);
 		
 		//---------------------------------------------------------
 		
