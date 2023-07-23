@@ -976,6 +976,9 @@ main()
 		float scale = 1.f;
 		Texture2D texture = LoadTexture("car_plain.png");
 
+		float runtime = 0.f;
+		float lift_amount = 5;
+
 		struct _shadow {
 			Vector2 anchor = {72, -15};
 			Texture2D shadow_tex = LoadTexture("car_shadow.png");
@@ -995,9 +998,14 @@ main()
 		_FireAnimation fire_animation2 = {142, 72};
 
 		void draw(float delta_time) {
+
+			runtime += delta_time;
+
+			float lift = lift_amount * sin(runtime*3);
+
 			rlPushMatrix();
 
-			rlTranslatef(position.x, position.y, 0);
+			rlTranslatef(position.x, position.y + lift, 0);
 			rlScalef(scale, scale, 1.f);
 
 			shadow.draw(orientation);
