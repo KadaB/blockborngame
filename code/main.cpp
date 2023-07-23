@@ -742,9 +742,31 @@ have to be done over and over again for each one)
 3. Throw in various lerps to make the billboard spawn and move smoothly...
 
 */
+
+struct billboard
+{
+	float SpriteScale;
+	float SpriteVerticalTweak;
+	
+	//Texture2D TextureRight;
+	//Texture2D TextureLeft;
+	Texture2D TextureRight;
+	Texture2D TextureLeft;
+};
+
+struct thing
+{
+	float Distance;
+	float XOffset;
+	
+	float RoadSide; //NOTE(moritz): -1: left, 1: right
+	
+	billboard *Billboard;
+};
+
 #if 1
 void
-DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
+DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Distance, */float MaxDistance,
 			  float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount, 
 			  float CameraHeight, road_list *ActiveRoadList, float PlayerBaseXOffset, bool DebugText = false)
 {
@@ -752,17 +774,23 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	float BaseRoadHalfWidth   = fScreenWidth*0.6f;
 	float AngleOfRoad = PlayerBaseXOffset/fDepthLineCount;
 	
+	if(Thing->Distance > MaxDistance)
+		return;
+	
+	if(Thing->RoadSide == -1.0f)
+		int Foo = 0;
+	
 	//NOTE(moirtz): Test for "scaling in" distant billboards instead of popping them in...
 	//float ScaleInDistance = 10.0f;
 	float OneOverScaleInDistance = 0.1f;
-	float ScaleInT = (MaxDistance - Distance)*OneOverScaleInDistance;
+	float ScaleInT = (MaxDistance - Thing->Distance)*OneOverScaleInDistance;
 	ScaleInT = Clamp(0.0f, ScaleInT, 1.0f);
 	
 	if(DebugText)
 		DrawText(TextFormat("TreeScaleInT: %f", ScaleInT), 20, 20, 10, RED);
 	
 	float OneOverMaxDistance = 1.0f/MaxDistance;
-	float BasePDepth = Distance*OneOverMaxDistance;
+	float BasePDepth = Thing->Distance*OneOverMaxDistance;
 	
 	//NOTE(moritz): Go through Depthlines (back to front) and find the first one with equal or smaller depth
 	int BasePDepthLineIndex = -1;
@@ -810,9 +838,17 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	
 	//NOTE(moritz): Where the sprite will be at the bottom of the Road
 	//float BasePOffsetX = BaseRoadHalfWidth + 300.0f + 0.5f*((float)Texture.width);
-	float BasePOffsetX = 0.5f*((float)Texture.width) + TWEAK(300.0f);
-	float SpriteScale  = TWEAK(2.0f);
-	float SpriteVerticalTweak = TWEAK(0.15f);
+	
+	Texture2D CurrentTexture;
+	
+	if(Thing->RoadSide == -1.0f)
+		CurrentTexture = Billboard->TextureLeft;
+	else if(Thing->RoadSide == 1.0f)
+		CurrentTexture = Billboard->TextureRight;
+	
+	float BasePOffsetX = Thing->RoadSide*0.5f*((float)CurrentTexture.width) + Thing->XOffset;
+	float SpriteScale  = Billboard->SpriteScale;
+	float SpriteVerticalTweak = Billboard->SpriteVerticalTweak;
 	
 	//NOTE(moritz): Some more lerping for the X part of BaseP. Taking into account curviness, angle of road and all that nonesense...
 	//float fDepthLineCount = (float)DepthLineCount;
@@ -822,7 +858,7 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	
 	float fBasePDepthLineIndex = (float)BasePDepthLineIndex;
 	
-	road_segment *CurrentSegment = ActiveRoadList->First;//BottomSegment;
+	road_segment *CurrentSegment = ActiveRoadList->First;
 	
 	float dX = 0.0f;
 	float fCurrentCenterOffsetX = 0.0f;
@@ -859,28 +895,31 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 		float SteerOffset = AngleOfRoad*(fDepthLineCount - fLineY);
 		
 		if(DepthLineIndex == (OnePastLastDepthLine - 2))
-			X0 = 0.5f*fScreenWidth + fCurrentCenterOffsetX + SteerOffset + fRoadWidth + Blarg;
+			X0 = 0.5f*fScreenWidth + fCurrentCenterOffsetX + SteerOffset + Thing->RoadSide*fRoadWidth + Blarg;
 		else if(DepthLineIndex == (OnePastLastDepthLine - 1))
-			X1 = 0.5f*fScreenWidth + fCurrentCenterOffsetX + SteerOffset + fRoadWidth + Blarg;
+			X1 = 0.5f*fScreenWidth + fCurrentCenterOffsetX + SteerOffset + Thing->RoadSide*fRoadWidth + Blarg;
 	}
 	
 	
 	Vector2 TestSize = {5.0f, 5.0f};
 	
 	Vector2 BaseP = {};
-	BaseP.x = Lerp(X0, t, X1) /*- AngleOfRoad*(fDepthLineCount - BasePScreenY)*/;
+	BaseP.x = Lerp(X0, t, X1);
 	BaseP.y = BasePScreenY;
 	
 	
 	//NOTE(moritz): Convert from BaseP to draw p... complying with raylib convention
 	Vector2 SpriteDrawP = {};
-	SpriteDrawP.x = BaseP.x - 0.5f*((float)Texture.width)*DepthScale*SpriteScale*ScaleInT;
-	SpriteDrawP.y = BaseP.y - ((float)Texture.height)*DepthScale*SpriteScale*ScaleInT + SpriteVerticalTweak*(float)Texture.height*DepthScale*SpriteScale*ScaleInT;
+	SpriteDrawP.x = BaseP.x - 0.5f*((float)CurrentTexture.width)*DepthScale*SpriteScale*ScaleInT;
+	SpriteDrawP.y = BaseP.y - ((float)CurrentTexture.height)*DepthScale*SpriteScale*ScaleInT + SpriteVerticalTweak*(float)CurrentTexture.height*DepthScale*SpriteScale*ScaleInT;
 	
-	DrawTextureEx(Texture, SpriteDrawP, 0.0f, DepthScale*SpriteScale*ScaleInT, WHITE);
+	DrawTextureEx(CurrentTexture, SpriteDrawP, 0.0f, DepthScale*SpriteScale*ScaleInT, WHITE);
 	
+#if 0
+	//NOTE(moritz): Debug vis
 	DrawRectangleV(BaseP, TestSize, RED);
 	DrawRectangleV(SpriteDrawP, TestSize, BLACK);
+#endif
 }
 #endif
 
@@ -905,12 +944,12 @@ InitSegment(road_segment *Segment, road_segment *PrevSegment, random_series *Ent
 
 bool isImageClicked(const Vector2 & image_position, const Image & query_image) {
 	Vector2 in_image_pos = GetMousePosition() - image_position;
-
+	
 	if(in_image_pos.x >= 0 && in_image_pos.x < query_image.width
-		&& in_image_pos.y >= 0 && in_image_pos.y < query_image.height) {
+	   && in_image_pos.y >= 0 && in_image_pos.y < query_image.height) {
 		// look into image data
 		Color color = GetImageColor(query_image, in_image_pos.x, in_image_pos.y);
-
+		
 		if(color.a > 128) {
 			return true;
 		}
@@ -956,13 +995,24 @@ main()
 	
 	//NOTE(moritz): Post processing shader
 	Shader LottesShader = LoadShader(0, "crt.fs");
-	bool Foo = IsShaderReady(LottesShader);
 	
 	//---------------------------------------------------------
 	
 	//NOTE(moritz): Load textures
-	Texture2D TreeTexture = LoadTexture("building.png");
+	Texture2D TreeTexture = LoadTexture("tree.png");
 	SetTextureFilter(TreeTexture, TEXTURE_FILTER_BILINEAR);
+	
+	Texture2D RamenShopRightTexture = LoadTexture("building_right.png");
+	SetTextureFilter(RamenShopRightTexture, TEXTURE_FILTER_BILINEAR);
+	
+	Texture2D RamenShopLeftTexture = LoadTexture("building_left.png");
+	SetTextureFilter(RamenShopLeftTexture, TEXTURE_FILTER_BILINEAR);
+	
+	Texture2D LanternLeftTexture = LoadTexture("lantern_left.png");
+	SetTextureFilter(LanternLeftTexture, TEXTURE_FILTER_BILINEAR);
+	
+	Texture2D LanternRightTexture = LoadTexture("lantern_right.png");
+	SetTextureFilter(LanternRightTexture, TEXTURE_FILTER_BILINEAR);
 	
 	Texture2D CarTexture = LoadTexture("player_car.png");
 	SetTextureFilter(CarTexture, TEXTURE_FILTER_BILINEAR);
@@ -973,26 +1023,27 @@ main()
 	
 	Texture2D cross_hair_texture = LoadTexture("crosshair.png");
 	SetTextureFilter(cross_hair_texture, TEXTURE_FILTER_BILINEAR);
-
+	
 	struct _dithered_horizon {
 		Vector2 position = {0, 0};
 		Vector2 anchor = {400, 129};
 		Texture2D dithered_horizon_texture = LoadTexture("dithered_horizon.png");
-
+		
 		float displacement_amount = -2;
 		float runtime = 0.0f;
 		void draw(float delta_time) {
 			runtime += delta_time;
-
+			
 			float cur_displacement = sin(runtime * 2) * displacement_amount;
-
+			
 			rlPushMatrix();
 			rlTranslatef( position.x, position.y, 0);
 			rlTranslatef(-anchor.x, -anchor.y, 0);
 			DrawTexture(dithered_horizon_texture, 0, cur_displacement, WHITE);
 			rlPopMatrix();
 		}
-	} dithered_horizon = {.position = {ScreenWidth/2.f, ScreenHeight/2.f}};
+	} dithered_horizon = {/*.position = */{ScreenWidth/2.f, ScreenHeight/2.f}};
+	
 	
 	struct _Crosshair {
 		Vector2 position = {0.0f, 0.0f};
@@ -1013,14 +1064,14 @@ main()
 		int calculate_current_frame() {
 			return state % 2;
 		}
-
+		
 		
 		// MARK1
 		void draw(float delta_time) {
 			runtime += delta_time;
 			_Frame current_frame = frames[calculate_current_frame()];
 			const Vector2 &anchor = current_frame.anchor;
-
+			
 			if(state == 1) {
 				orientation = runtime * 72;
 			} else {
@@ -1040,7 +1091,7 @@ main()
 		}
 		
 	} crosshair;
-
+	
 	struct _FireAnimation {
 		Vector2 position = {0.0f, 0.0f};
 		float frame_duration = 0.1f;
@@ -1144,44 +1195,44 @@ main()
 	
 	SetTextureWrap(car.fire_animation2.frames[0].texture, TEXTURE_WRAP_CLAMP);
 	SetTextureWrap(car.fire_animation2.frames[1].texture, TEXTURE_WRAP_CLAMP);
-
+	
 	struct _Lazer {
 		Vector2 start_position = {0.f, 0.f};
 		Vector2 end_position = {0.f, 0.f};
-
+		
 		Vector2 normal = {0, 0};
 		float runtime = 0.f;
 		float spread = 50.f;
 		float animation_length = .5f;
-
+		
 		bool isRunning = false;
-
+		
 		void start(Vector2 start_pos, Vector2 end_pos) {
 			start_position = start_pos;
 			end_position = end_pos;
 			Vector2 line = NOZ(end_position - start_position);		
 			normal = {-line.y, line.x};
-
+			
 			runtime = 0;
 			isRunning = true;
 		}
-
+		
 		void draw(float delta_time) {
 			if(!isRunning) return;
-
+			
 			runtime += delta_time;
-
+			
 			if(runtime < animation_length) {
 				float animation_runtime = Clamp(0, animation_length, runtime);
 				float factor = 1. - pow((animation_runtime / animation_length), 2);
 				float cur_length = spread * factor;
 				DrawTriangle(start_position, end_position + normal*cur_length, end_position - normal*cur_length, {255, 0, 0, 80});
 				DrawTriangle(start_position, end_position + normal*cur_length*.4, end_position - normal*cur_length*.4, {255, 0, 0, 80});
-
+				
 				DrawLineEx(start_position, end_position, 5, {255, 0, 0, 220});
 			}
 			else {
-			  isRunning = false;
+				isRunning = false;
 				runtime = 0;
 			}
 		}
@@ -1212,8 +1263,6 @@ And then the game loads in the textures with mipmaps included.
 	SetTextureFilter(TreeTexture, TEXTURE_FILTER_TRILINEAR);
 	SetTextureWrap(TreeTexture, TEXTURE_WRAP_CLAMP);
 #endif
-	
-	
 	//---------------------------------------------------------
 	
 	//NOTE(moritz): Depth related
@@ -1241,6 +1290,92 @@ And then the game loads in the textures with mipmaps included.
 	
 	//---------------------------------------------------------
 	
+	random_series RoadEntropy = {420};
+	
+	//NOTE(moritz): Billboards and things
+	billboard RamenShopSprite;
+	RamenShopSprite.SpriteScale = 2.0f;
+	RamenShopSprite.SpriteVerticalTweak = 0.15f;
+	RamenShopSprite.TextureLeft  = RamenShopLeftTexture;
+	RamenShopSprite.TextureRight = RamenShopRightTexture;
+	
+	billboard LanternSprite;
+	LanternSprite.SpriteScale = 2.0f;
+	LanternSprite.SpriteVerticalTweak = 0.05f;
+	//LanternSprite.Texture = LanternTexture;
+	LanternSprite.TextureLeft = LanternLeftTexture;
+	LanternSprite.TextureRight = LanternRightTexture;
+	
+	//NOTE(moritz): Side bands.. 4?  32 per side band? times two for left/ right side
+	thing Things[256] = {};
+	
+	int SideBandIndex = 0;
+	
+	//NOTE(moritz): Init things...
+	
+	//NOTE(moritz): Right side
+	float CurrentDistance = MaxDistance;
+	for(int ThingIndex = 0;
+		ThingIndex < (ArrayCount(Things)/2);
+		++ThingIndex)
+	{
+		SideBandIndex = ThingIndex/32;
+		
+		float fSideBand = (float)SideBandIndex; //0 is lamps
+		
+		Things[ThingIndex].Distance = CurrentDistance;
+		
+		Things[ThingIndex].RoadSide = 1.0f;
+		
+		if(SideBandIndex == 0)
+			Things[ThingIndex].Billboard = &LanternSprite;
+		else
+		{
+			Things[ThingIndex].XOffset = 400.0f*fSideBand + RandomBilateral(&RoadEntropy)*50.0f;
+			Things[ThingIndex].Billboard = &RamenShopSprite;
+		}
+		
+		float DistanceSpacing = 10.0f + 30.0f*RandomUnilateral(&RoadEntropy);
+		CurrentDistance -= DistanceSpacing;
+		
+		//NOTE(moritz): Prep next band filling
+		if(((ThingIndex + 1)/32) > SideBandIndex)
+			CurrentDistance = MaxDistance;
+	}
+	
+	//NOTE(moritz): Left side
+	SideBandIndex = 0;
+	int ThingIndexOffset = ArrayCount(Things)/2;
+	CurrentDistance = MaxDistance;
+	for(int ThingIndex = (ArrayCount(Things)/2);
+		ThingIndex < ArrayCount(Things);
+		++ThingIndex)
+	{
+		SideBandIndex = (ThingIndex - ThingIndexOffset)/32;
+		
+		float fSideBand = (float)SideBandIndex; //0 is lamps
+		
+		Things[ThingIndex].RoadSide = -1.0f;
+		Things[ThingIndex].Distance = CurrentDistance;
+		
+		if(SideBandIndex == 0)
+			Things[ThingIndex].Billboard = &LanternSprite;
+		else
+		{
+			Things[ThingIndex].XOffset = -400.0f*fSideBand + RandomBilateral(&RoadEntropy)*50.0f;
+			Things[ThingIndex].Billboard = &RamenShopSprite;
+		}
+		
+		float DistanceSpacing = 10.0f + 30.0f*RandomUnilateral(&RoadEntropy);
+		CurrentDistance -= DistanceSpacing;
+		
+		//NOTE(moritz): Prep next band filling
+		if(((ThingIndex + 1 - ThingIndexOffset)/32) > SideBandIndex)
+			CurrentDistance = MaxDistance;
+	}
+	
+	//---------------------------------------------------------
+	
 	//NOTE(moritz): Player
 	float PlayerSpeed = 0.0f;
 	float PlayerP     = 0.0f;
@@ -1258,7 +1393,7 @@ And then the game loads in the textures with mipmaps included.
 	
 	//---------------------------------------------------------
 	
-	random_series RoadEntropy = {420};
+	
 	road_pool RoadPool      = {};
 	road_list ActiveRoadList = {};
 	
@@ -1276,7 +1411,7 @@ And then the game loads in the textures with mipmaps included.
 	//road_segment TreeSegment = GetSegmentAtDistance(TreeDistance, BottomSegment, NextSegment);
 	
 	float lenkVelocity = 0.f;
-
+	
 	float accumulatedVelocity = 0.f;
 	float accumulatedVelocityDamping = .02f;
 	
@@ -1304,6 +1439,14 @@ And then the game loads in the textures with mipmaps included.
 				//TODO(moritz): Load music and sfx here
 			}
 		}
+		
+#if 0
+		//NOTE(moritz): Sprite tweaking station
+		{
+			LanternSprite.SpriteScale = TWEAK(2.0f);
+			LanternSprite.SpriteVerticalTweak = TWEAK(0.05f);
+		}
+#endif
 		
 		float dtForFrame = GetFrameTime();
 		
@@ -1379,7 +1522,7 @@ And then the game loads in the textures with mipmaps included.
 		lenkVelocity = Clamp(-max_steer, lenkVelocity, max_steer);
 		car.orientation = (-lenkVelocity / max_steer) * 20.f;
 		float final_lenkVelocity = lenkVelocity*SteerFactor * dtForFrame;
-
+		
 		PlayerBaseXOffset += final_lenkVelocity;
 		accumulatedVelocity += final_lenkVelocity*accumulatedVelocityDamping;
 		
@@ -1433,10 +1576,53 @@ And then the game loads in the textures with mipmaps included.
 		float OffRoadLimit = TWEAK(1000.0f);
 		PlayerBaseXOffset = Clamp(-OffRoadLimit, PlayerBaseXOffset, OffRoadLimit);
 		
+		
+		
+#if 0
 		//NOTE(moritz): Update billboard positions
 		TreeDistance -= dPlayerP;
 		if((TreeDistance < 0.0f)/* && NewBottomSegment*/) //TODO(moritz): poor man's way of syncing tree spawn with segment swap to avoid weird bug
 			TreeDistance = MaxDistance + 1.0f;
+#endif
+		//NOTE(moritz): Update thing positions
+		for(int ThingIndex = 0;
+			ThingIndex < ArrayCount(Things);
+			++ThingIndex)
+		{
+			Things[ThingIndex].Distance -= dPlayerP;
+			
+			if(Things[ThingIndex].Distance < 0.0f)
+				Things[ThingIndex].Distance = MaxDistance;
+		}
+		
+		//NOTE(moritz): Sort thing positions back to front
+		bool SwapHappened = false;
+		for(int Outer = 0;
+			Outer < ArrayCount(Things);
+			++Outer)
+		{
+			SwapHappened = false;
+			
+			for(int Inner = 0;
+				Inner < (ArrayCount(Things) - 1);
+				++Inner)
+			{
+				thing *EntryA = Things + Inner;
+				thing *EntryB = Things + Inner + 1;
+				
+				if(EntryA->Distance < EntryB->Distance)
+				{
+					thing Temp = *EntryA;
+					*EntryA = *EntryB;
+					*EntryB = Temp;
+					
+					SwapHappened = true;
+				}
+			}
+			
+			if(!SwapHappened) //NOTE(moritz): Early out
+				break;
+		}
 		
 		//BeginDrawing();
 		BeginTextureMode(TargetTexture);
@@ -1444,10 +1630,10 @@ And then the game loads in the textures with mipmaps included.
 		ClearBackground(PINK);
 		DrawRectangleGradientV(0, 0, ScreenWidth, ScreenHeight/2, SkyGradientCol0, SkyGradientCol1);
 		DrawFPS(30, 10);
-
+		
 		// horizon
 		dithered_horizon.draw(dtForFrame);
-
+		
 		//NOTE(moritz): Parallax background
 		Vector2 SunsetP;
 		SunsetP.x = accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
@@ -1460,12 +1646,21 @@ And then the game loads in the textures with mipmaps included.
 		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
 				 &ActiveRoadList, PlayerBaseXOffset);
 		
-#if 1
+#if 0
 		if(TreeDistance > 0.0f)
 			DrawBillboard(TreeTexture, TreeDistance, MaxDistance,
 						  fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
 						  CameraHeight,  &ActiveRoadList, PlayerBaseXOffset);
 #endif
+		//NOTE(moritz): Draw things/billboards
+		for(int ThingIndex = 0;
+			ThingIndex < ArrayCount(Things);
+			++ThingIndex)
+		{
+			DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex,
+						  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
+						  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
+		}
 		
 		//NOTE(moritz): Draw player car
 		Vector2 PlayerCarP = 
@@ -1473,22 +1668,22 @@ And then the game loads in the textures with mipmaps included.
 			0.5f*fScreenWidth, // - 0.5f*(float)CarTexture.width,
 			fScreenHeight - 60.0f // - (float)CarTexture.height
 		};
-
+		
 		// Draw the cross hair
 		crosshair.position = GetMousePosition();
 		crosshair.draw(dtForFrame);
 		bool isLeftPressed = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
-
+		
 		bool inImage = isImageClicked(SunsetP, SunImage);
 		crosshair.state = inImage ? 1 : 0;
-
+		
 		if(isLeftPressed && inImage) {
 			if(!lazer.isRunning) {
 				lazer.start(PlayerCarP + (Vector2){0, -60}, GetMousePosition());
 			}
 		}
 		lazer.draw(dtForFrame);
-
+		
 		car.position = PlayerCarP;
 		car.draw(dtForFrame);
 		
@@ -1515,6 +1710,9 @@ And then the game loads in the textures with mipmaps included.
 			DrawLineEx(MarkerStart, MarkerEnd, 4.0f, LineColor);
 		}
 #endif
+		
+		crosshair.position = {(float) GetMouseX(), (float) GetMouseY()};
+		crosshair.draw(dtForFrame);
 		
 		//---------------------------------------------------------
 		

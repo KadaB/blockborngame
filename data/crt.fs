@@ -34,7 +34,7 @@ vec2 iResolution = vec2(800.0, 450.0);
 #else
   // Optimize for resize.
   //#define res (iResolution.xy/6.0)
-	#define res (iResolution.xy/3.0)
+	#define res (iResolution.xy/1.0)
 #endif
 
 // Hardness of scanline.
@@ -50,7 +50,8 @@ float hardPix=-3.0;
 // Display warp.
 // 0.0 = none
 // 1.0/8.0 = extreme
-vec2 warp=vec2(1.0/32.0,1.0/24.0); 
+//vec2 warp=vec2(1.0/32.0,1.0/24.0); 
+vec2 warp=vec2(0.0,0.0); 
 
 // Amount of shadow mask.
 float maskDark=0.5;
