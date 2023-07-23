@@ -913,7 +913,7 @@ main()
 	
 	float fScreenWidth  = 800.0f;
 	float fScreenHeight = 450.0f;
-
+	
 	float fScreenCenterX = 0.5f*fScreenWidth + 0.5f;
 	
 	bool AudioIsInitialised = false;
@@ -936,6 +936,12 @@ main()
 	link_pool LinkPool = {};
 	link_list LinkList = {};
 	
+	
+	//---------------------------------------------------------
+	
+	//NOTE(moritz): Post processing shader
+	Shader LottesShader = LoadShader(0, "crt.fs");
+	bool Foo = IsShaderReady(LottesShader);
 	
 	//---------------------------------------------------------
 	
@@ -993,7 +999,6 @@ main()
 		}
 		
 	};
-	
 	
 	
 	struct _Car {
@@ -1136,17 +1141,7 @@ And then the game loads in the textures with mipmaps included.
 	road_segment *InitialRoadSegment = AllocateRoadSegment(&RoadPool);
 	
 	InitialRoadSegment->Position = 0.0f;
-	//InitialRoadSegment->ddX      = RandomBilateral(&RoadEntropy)*0.005f;
 	
-	//InitialRoadSegment->Length = 25.0f + 80.0f*
-	
-#if 0
-	InitialRoadSegment->EndRelPX = 250.0f*RandomBilateral(&RoadEntropy);
-	
-	InitialRoadSegment->ddX      = 2.0f*(InitialRoadSegment->EndRelPX)/(MaxDistance*(MaxDistance + 1.0f));
-#endif
-	
-	//InitialRoadSegment->ddX = RoadPresets[XORShift32(&RoadEntropy) % ArrayCount(RoadPresets)];
 	InitialRoadSegment->ddX = 0.0f;
 	
 	Append(&ActiveRoadList, InitialRoadSegment);
@@ -1155,11 +1150,15 @@ And then the game loads in the textures with mipmaps included.
 	
 	float TreeDistance = MaxDistance;
 	//road_segment TreeSegment = GetSegmentAtDistance(TreeDistance, BottomSegment, NextSegment);
-
+	
 	float lenkVelocity = 0.f;
 
 	float accumulatedVelocity = 0.f;
 	float accumulatedVelocityDamping = .02f;
+	
+	//---------------------------------------------------------
+	
+	RenderTexture2D TargetTexture = LoadRenderTexture(ScreenWidth, ScreenHeight);
 	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
@@ -1233,7 +1232,7 @@ And then the game loads in the textures with mipmaps included.
 		float MinSteering = TWEAK(10.0f);
 		
 		float SteerFactor = Lerp(MaxSteerFactor, SteerFactorT, MinSteerFactor);
-
+		
 		const float steer_speed = 200.f;
 		const float max_steer = 50.f;
 		float lenkAcceleration = steer_speed * dtForFrame;
@@ -1250,7 +1249,7 @@ And then the game loads in the textures with mipmaps included.
 		else {
 			lenkVelocity += -1*Sign(lenkVelocity)*lenkAcceleration ;
 		}
-
+		
 		lenkVelocity = Clamp(-max_steer, lenkVelocity, max_steer);
 		car.orientation = (-lenkVelocity / max_steer) * 20.f;
 		float final_lenkVelocity = lenkVelocity*SteerFactor * dtForFrame;
@@ -1313,7 +1312,8 @@ And then the game loads in the textures with mipmaps included.
 		if((TreeDistance < 0.0f)/* && NewBottomSegment*/) //TODO(moritz): poor man's way of syncing tree spawn with segment swap to avoid weird bug
 			TreeDistance = MaxDistance + 1.0f;
 		
-		BeginDrawing();
+		//BeginDrawing();
+		BeginTextureMode(TargetTexture);
 		
 		ClearBackground(PINK);
 		DrawRectangleGradientV(0, 0, ScreenWidth, ScreenHeight/2, SkyGradientCol0, SkyGradientCol1);
@@ -1385,8 +1385,20 @@ And then the game loads in the textures with mipmaps included.
 		
 		//---------------------------------------------------------
 		
-		EndDrawing();
+		//EndDrawing();
+		EndTextureMode();
 		
+		BeginDrawing();
+		
+		ClearBackground(PINK);
+		
+		BeginShaderMode(LottesShader);
+		
+		DrawTextureRec(TargetTexture.texture, /*(Rectangle)*/{ 0, 0, (float)TargetTexture.texture.width, (float)-TargetTexture.texture.height }, /*(Vector2)*/{ 0, 0 }, WHITE);
+		
+		EndShaderMode();
+		
+		EndDrawing();
 		
 		//---------------------------------------------------------
 #ifndef WEB_BUILD
