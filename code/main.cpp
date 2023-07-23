@@ -725,12 +725,25 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	}
 }
 
-#if 0
+/*
+NOTE(moritz):
+Drawing billboards is kinda similiar to drawing the road itself, except for the first step.
+
+1. Find the depth line the billboard is on based on its distance.
+
+2. Do the accumulation up until that depth line to figure out where the road is and offset the billboard.
+(in the future this could be a single pass for all of the billboards so that the accumulation doesn't
+have to be done over and over again for each one)
+
+3. Throw in various lerps to make the billboard spawn and move smoothly...
+
+*/
+#if 1
 void
 DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 			  /*float Curviness, */float fScreenWidth, float fScreenHeight, depth_line *DepthLines,
-			  int DepthLineCount, float CameraHeight, road_segment BottomSegment,
-			  road_segment NextSegment, bool DebugText = false)
+			  int DepthLineCount, float CameraHeight, road_list *ActiveRoadList,/*road_segment BottomSegment,
+			  road_segment NextSegment, */bool DebugText = false)
 {
 	//float dX = 0.0f;
 	float fCurrentCenterX     = fScreenWidth*0.5f + 0.5f; //NOTE(moritz): Road center line 
@@ -805,7 +818,7 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	
 	float fBasePDepthLineIndex = (float)BasePDepthLineIndex;
 	
-	road_segment CurrentSegment = BottomSegment;
+	road_segment *CurrentSegment = ActiveRoadList->First;//BottomSegment;
 	
 	float fCurveStartX = fCurrentCenterX;
 	
@@ -914,9 +927,11 @@ main()
 	
 	//---------------------------------------------------------
 	
+#ifndef WEB_BUILD
 	//NOTE(moritz): Load source code for tweak variables
 	char *SourceCode = LoadFileText("..\\code\\main.cpp");
 	int SourceCodeByteCount = GetFileLength("..\\code\\main.cpp") + 1;
+#endif
 	
 	link_pool LinkPool = {};
 	link_list LinkList = {};
@@ -1330,12 +1345,12 @@ And then the game loads in the textures with mipmaps included.
 		}
 		
 		
-#if 0
+#if 1
 		if(TreeDistance > 0.0f)
 			DrawBillboard(TreeTexture, TreeDistance, MaxDistance,
 						  fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-						  CameraHeight, 
-						  BottomSegment, NextSegment, true);
+						  CameraHeight,  &ActiveRoadList,
+						  /*BottomSegment, NextSegment,*/ true);
 #endif
 		
 		//NOTE(moritz): Debug stuff
