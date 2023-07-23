@@ -984,11 +984,11 @@ main()
 			Vector2 anchor = {72, -15};
 			Texture2D shadow_tex = LoadTexture("car_shadow.png");
 
-			void draw(float parent_orientation) {
+			void draw(float parent_orientation, float lift) {
 				rlPushMatrix();
 					rlRotatef(-parent_orientation, 0, 0, 1);
 					rlTranslatef(-anchor.x,-anchor.y, 0);
-					DrawTexture(shadow_tex, 0, 0, WHITE);
+					DrawTexture(shadow_tex, 0, -lift*1.5+5, WHITE);
 				rlPopMatrix();
 			}
 		} shadow;
@@ -1009,7 +1009,7 @@ main()
 			rlTranslatef(position.x, position.y + lift, 0);
 			rlScalef(scale, scale, 1.f);
 
-			shadow.draw(orientation);
+			shadow.draw(orientation, lift);
 
 			rlRotatef(orientation, 0, 0, 1);
 			rlTranslatef(-anchor.x,- anchor.y, 0);
