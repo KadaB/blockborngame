@@ -903,7 +903,7 @@ main()
 	InitWindow(ScreenWidth, ScreenHeight, "raylib");
 	SetTargetFPS(60);
 	
-	// HideCursor();
+	HideCursor();
 	//---------------------------------------------------------
 	
 	//NOTE(moritz): Load source code for tweak variables
@@ -1356,9 +1356,9 @@ And then the game loads in the textures with mipmaps included.
 
 		// Draw the cross hair
 		
-		//DrawTextureEx(cross_hair_texture, {GetMouseX()-cross_hair_texture.width/2, GetMouseY() - cross_hair_texture.height/2} , 0, 1, WHITE);
-		fire_animation1.position = {(float) GetMouseX(), (float) GetMouseY()};
-		fire_animation1.draw(dtForFrame);
+		Vector2 crosshair_pos = {(float) GetMouseX(), (float) GetMouseY()};
+		Vector2 crosshair_anchor = {cross_hair_texture.width / 2.f, cross_hair_texture.height / 2.f};
+		DrawTextureEx(cross_hair_texture, crosshair_pos - crosshair_anchor , 0, 1, WHITE);
 		
 		//---------------------------------------------------------
 		
