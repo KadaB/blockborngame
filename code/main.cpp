@@ -203,6 +203,10 @@ struct road_segment
 	road_segment *Next;
 };
 
+float rand01() {
+	return (float)rand() / (float)RAND_MAX;
+}
+
 //NOTE(moritz): ddX presets
 float RoadPresets[] =
 {
@@ -974,8 +978,8 @@ main()
 			const Vector2 &anchor = current_frame.anchor;
 			
 			// let the fire oscillate a bit
-			float osc_scale_x = scale * scale_mult * (1+ (.3 * (double)rand() / (double)RAND_MAX ));
-			float osc_scale_y = scale * scale_mult * (1+ (.4 * (double)rand() / (double)RAND_MAX ));
+			float osc_scale_x = scale * scale_mult * (1+ (.3 * rand01()));
+			float osc_scale_y = scale * scale_mult * (1+ (.4 * rand01()));
 			rlPushMatrix();
 			
 			rlTranslatef(position.x, position.y, 0);
@@ -1227,7 +1231,7 @@ And then the game loads in the textures with mipmaps included.
 		
 		float SteerFactor = Lerp(MaxSteerFactor, SteerFactorT, MinSteerFactor);
 
-		const float steer_speed = 100.f;
+		const float steer_speed = 200.f;
 		const float max_steer = 50.f;
 		float lenkAcceleration = steer_speed * dtForFrame;
 		if(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
@@ -1245,7 +1249,7 @@ And then the game loads in the textures with mipmaps included.
 		}
 
 		lenkVelocity = Clamp(-max_steer, lenkVelocity, max_steer);
-		car.orientation = -lenkVelocity / max_steer * 15.f;
+		car.orientation = (-lenkVelocity / max_steer) * 20.f;
 		PlayerBaseXOffset += lenkVelocity*SteerFactor * dtForFrame;
 		
 		//NOTE(moritz): Update active segments position
