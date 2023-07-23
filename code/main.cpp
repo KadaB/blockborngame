@@ -1157,6 +1157,9 @@ And then the game loads in the textures with mipmaps included.
 	//road_segment TreeSegment = GetSegmentAtDistance(TreeDistance, BottomSegment, NextSegment);
 
 	float lenkVelocity = 0.f;
+
+	float accumulatedVelocity = 0.f;
+	float accumulatedVelocityDamping = .02f;
 	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
@@ -1250,7 +1253,10 @@ And then the game loads in the textures with mipmaps included.
 
 		lenkVelocity = Clamp(-max_steer, lenkVelocity, max_steer);
 		car.orientation = (-lenkVelocity / max_steer) * 20.f;
-		PlayerBaseXOffset += lenkVelocity*SteerFactor * dtForFrame;
+		float final_lenkVelocity = lenkVelocity*SteerFactor * dtForFrame;
+
+		PlayerBaseXOffset += final_lenkVelocity;
+		accumulatedVelocity += final_lenkVelocity*accumulatedVelocityDamping;
 		
 		//NOTE(moritz): Update active segments position
 		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
@@ -1315,7 +1321,7 @@ And then the game loads in the textures with mipmaps included.
 		
 		//NOTE(moritz): Parallax background
 		Vector2 SunsetP;
-		SunsetP.x = 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
+		SunsetP.x = accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
 		SunsetP.y = fScreenHeight - (float)SunsetTexture.height - TWEAK(200.0f);
 		DrawTextureEx(SunsetTexture, SunsetP, 0.0f, 1.0f, WHITE);
 		
