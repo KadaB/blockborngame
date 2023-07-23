@@ -48,3 +48,14 @@ if (APPLE)
     target_link_libraries(${PROJECT_NAME} "-framework Cocoa")
     target_link_libraries(${PROJECT_NAME} "-framework OpenGL")
 endif()
+
+message(PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+message(CMAKE_CURRENT_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
+
+# copy resource files into build folder:
+# set resource filename, ${PROJECT_SOURCE_DIR} not mandatory, but recommended 
+set(resource_files 
+  "${PROJECT_SOURCE_DIR}/data/"
+)
+# copy files
+file(COPY "${resource_files}" DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
