@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "raylib.h"
 #include "rlgl.h"
+#include "raymath.h"
 
 #define global static
 
@@ -124,7 +125,7 @@ Sign(float Float)
 }
 
 float
-Clamp(float Min, float Value, float Max)
+ClampM(float Min, float Value, float Max)
 {
 	if(Value < Min)
 		return Min;
@@ -154,21 +155,21 @@ Min(float A, float B)
 }
 
 float
-Lerp(float A, float t, float B)
+LerpM(float A, float t, float B)
 {
 	float Result = (1.0f - t)*A + t*B;
 	return(Result);
 }
 
 Vector2
-Lerp(Vector2 A, float t, Vector2 B)
+LerpM(Vector2 A, float t, Vector2 B)
 {
 	Vector2 Result = (1.0f - t)*A + t*B;
 	return(Result);
 }
 
 Color
-Lerp(Color A, float t, Color B)
+LerpM(Color A, float t, Color B)
 {
 	float Ar = (float)A.r;
 	float Ag = (float)A.g;
@@ -178,9 +179,9 @@ Lerp(Color A, float t, Color B)
 	float Bg = (float)B.g;
 	float Bb = (float)B.b;
 	
-	float Rr = Lerp(Ar, t, Br);
-	float Rg = Lerp(Ag, t, Bg);
-	float Rb = Lerp(Ab, t, Bb);
+	float Rr = LerpM(Ar, t, Br);
+	float Rg = LerpM(Ag, t, Bg);
+	float Rb = LerpM(Ab, t, Bb);
 	
 	Color Result;
 	Result.a = 255;
@@ -689,7 +690,7 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		
 		//NOTE(moritz): Made up damping... Seems better
 		float CurveDamping = sinf(fYLineNorm*0.5f*Pi32);
-		CurveDamping = Clamp(0.0f, CurveDamping, 1.0f);
+		CurveDamping = ClampM(0.0f, CurveDamping, 1.0f);
 		fCurrentCenterOffsetX *= CurveDamping;
 		
 		float SteerOffset = AngleOfRoad*(fDepthLineCount - fLineY);
@@ -823,7 +824,7 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 	float Scale0 = DepthLines[BasePDepthLineIndex].Scale;
 	float Scale1 = DepthLines[BasePDepthLineIndex + 1].Scale;
 	
-	float DepthScale = Lerp(Scale0, t, Scale1);
+	float DepthScale = LerpM(Scale0, t, Scale1);
 	
 	if(DebugText)
 		DrawText(TextFormat("TreeDepthScale: %f", DepthScale), 20, 30, 10, RED);
@@ -834,7 +835,7 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 		BasePScreenY = (float)DepthLineCount + (CameraHeight/BasePDepth);
 	
 	//NOTE(moritz):Clamp to screen coords to avoid some invalid memory access bug
-	BasePScreenY = Clamp(0.0f, BasePScreenY, fScreenHeight);
+	BasePScreenY = ClampM(0.0f, BasePScreenY, fScreenHeight);
 	
 	//NOTE(moritz): Where the sprite will be at the bottom of the Road
 	//float BasePOffsetX = BaseRoadHalfWidth + 300.0f + 0.5f*((float)Texture.width);
@@ -889,7 +890,7 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 		
 		//NOTE(moritz): Made up damping... Seems better
 		float CurveDamping = sinf(fYLineNorm*0.5f*Pi32);
-		CurveDamping = Clamp(0.0f, CurveDamping, 1.0f);
+		CurveDamping = ClampM(0.0f, CurveDamping, 1.0f);
 		fCurrentCenterOffsetX *= CurveDamping;
 		
 		float SteerOffset = AngleOfRoad*(fDepthLineCount - fLineY);
@@ -904,7 +905,7 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 	Vector2 TestSize = {5.0f, 5.0f};
 	
 	Vector2 BaseP = {};
-	BaseP.x = Lerp(X0, t, X1);
+	BaseP.x = LerpM(X0, t, X1);
 	BaseP.y = BasePScreenY;
 	
 	
@@ -1134,6 +1135,48 @@ main()
 		
 	};
 	
+
+	struct _Lazer {
+		Vector2 end_position = {0.f, 0.f};
+		Vector2 *start_position = &end_position;
+
+		Vector2 normal = {0, 0};
+		float runtime = 0.f;
+		float spread = 50.f;
+		float animation_length = .5f;
+
+		bool isRunning = false;
+
+		void start(Vector2 *start_pos, Vector2 end_pos) {
+			start_position = start_pos;
+			end_position = end_pos;
+			Vector2 line = NOZ(end_position - *start_position);		
+			normal = {-line.y, line.x};
+
+			runtime = 0;
+			isRunning = true;
+		}
+
+		void draw(float delta_time) {
+			if(!isRunning) return;
+
+			runtime += delta_time;
+
+			if(runtime < animation_length) {
+				float animation_runtime = ClampM(0, animation_length, runtime);
+				float factor = 1. - pow((animation_runtime / animation_length), 2);
+				float cur_length = spread * factor;
+				DrawTriangle(*start_position, end_position + normal*cur_length, end_position - normal*cur_length, {255, 0, 0, 80});
+				DrawTriangle(*start_position, end_position + normal*cur_length*.4, end_position - normal*cur_length*.4, {255, 0, 0, 80});
+
+				DrawLineEx(*start_position, end_position, 5, {255, 0, 0, 220});
+			}
+			else {
+			  isRunning = false;
+				runtime = 0;
+			}
+		}
+	} lazer_l, lazer_r;
 	
 	struct _Car {
 		Vector2 position = {0, 0};
@@ -1144,6 +1187,11 @@ main()
 		
 		float runtime = 0.f;
 		float lift_amount = 5;
+
+		Vector2 left_lazer_anchor = {19, 7};
+		Vector2 right_lazer_anchor = {132, 7};
+		Vector2 left_lazer_pos = {0, 0};
+		Vector2 right_lazer_pos = {0, 0};
 		
 		struct _shadow {
 			Vector2 anchor = {72, -15};
@@ -1177,11 +1225,16 @@ main()
 			rlRotatef(orientation, 0, 0, 1);
 			rlTranslatef(-anchor.x,- anchor.y, 0);
 			
-			float fire1_tmp_scale = Lerp(fire_animation1.scale,.5+ Clamp(-.5f, orientation / (CAR_TILT*2), .5),2.f);
+
+			Matrix matrix = rlGetMatrixTransform();
+			left_lazer_pos = Vector2Transform(left_lazer_anchor, matrix);
+			right_lazer_pos = Vector2Transform(right_lazer_anchor, matrix);
+
+			float fire1_tmp_scale = LerpM(fire_animation1.scale,.5+ ClampM(-.5f, orientation / (CAR_TILT*2), .5),2.f);
 			fire_animation1.orientation = 2*orientation;//Clamp(0, orientation, 15)*2.;
 			fire_animation1.draw(delta_time, fire1_tmp_scale);
 			
-			float fire2_tmp_scale = Lerp(1.f, .5+Clamp(-.5f, orientation / (-CAR_TILT*2), .5),2.f);
+			float fire2_tmp_scale = LerpM(1.f, .5+ClampM(-.5f, orientation / (-CAR_TILT*2), .5),2.f);
 			fire_animation2.orientation = 2*orientation;//Clamp(-15, orientation, 0)*2.;
 			fire_animation2.draw(delta_time, fire2_tmp_scale);
 			
@@ -1195,48 +1248,6 @@ main()
 	
 	SetTextureWrap(car.fire_animation2.frames[0].texture, TEXTURE_WRAP_CLAMP);
 	SetTextureWrap(car.fire_animation2.frames[1].texture, TEXTURE_WRAP_CLAMP);
-	
-	struct _Lazer {
-		Vector2 start_position = {0.f, 0.f};
-		Vector2 end_position = {0.f, 0.f};
-		
-		Vector2 normal = {0, 0};
-		float runtime = 0.f;
-		float spread = 50.f;
-		float animation_length = .5f;
-		
-		bool isRunning = false;
-		
-		void start(Vector2 start_pos, Vector2 end_pos) {
-			start_position = start_pos;
-			end_position = end_pos;
-			Vector2 line = NOZ(end_position - start_position);		
-			normal = {-line.y, line.x};
-			
-			runtime = 0;
-			isRunning = true;
-		}
-		
-		void draw(float delta_time) {
-			if(!isRunning) return;
-			
-			runtime += delta_time;
-			
-			if(runtime < animation_length) {
-				float animation_runtime = Clamp(0, animation_length, runtime);
-				float factor = 1. - pow((animation_runtime / animation_length), 2);
-				float cur_length = spread * factor;
-				DrawTriangle(start_position, end_position + normal*cur_length, end_position - normal*cur_length, {255, 0, 0, 80});
-				DrawTriangle(start_position, end_position + normal*cur_length*.4, end_position - normal*cur_length*.4, {255, 0, 0, 80});
-				
-				DrawLineEx(start_position, end_position, 5, {255, 0, 0, 220});
-			}
-			else {
-				isRunning = false;
-				runtime = 0;
-			}
-		}
-	} lazer;
 	
 	/*
 TODO(moritz): If we want to use mipmaps for our
@@ -1494,11 +1505,11 @@ And then the game loads in the textures with mipmaps included.
 		
 		//NOTE(moritz): Max speed is currently like ~25.0f
 		float SteerFactorT = (PlayerSpeed/28.0f);
-		SteerFactorT = Clamp(0.0f, SteerFactorT, 1.0f);
+		SteerFactorT = ClampM(0.0f, SteerFactorT, 1.0f);
 		
 		float MinSteering = TWEAK(10.0f);
 		
-		float SteerFactor = Lerp(MaxSteerFactor, SteerFactorT, MinSteerFactor);
+		float SteerFactor = LerpM(MaxSteerFactor, SteerFactorT, MinSteerFactor);
 		
 		const float steer_speed = 200.f;
 		const float max_steer = 50.f;
@@ -1519,7 +1530,7 @@ And then the game loads in the textures with mipmaps included.
 			lenkVelocity = fabs(lenkVelocity) < zero_epsilon ? 0.f : lenkVelocity;
 		}
 		
-		lenkVelocity = Clamp(-max_steer, lenkVelocity, max_steer);
+		lenkVelocity = ClampM(-max_steer, lenkVelocity, max_steer);
 		car.orientation = (-lenkVelocity / max_steer) * 20.f;
 		float final_lenkVelocity = lenkVelocity*SteerFactor * dtForFrame;
 		
@@ -1567,14 +1578,14 @@ And then the game loads in the textures with mipmaps included.
 		
 		float CurveForceT = 1.0f - ActiveRoadList.First->Next->Position;;
 		
-		CurveForceT = Clamp(0.0f, CurveForceT, 1.0f);
+		CurveForceT = ClampM(0.0f, CurveForceT, 1.0f);
 		
-		float CurveForce = PlayerSpeed*TWEAK(50.0f)*Lerp(ActiveRoadList.First->ddX, CurveForceT, ActiveRoadList.First->Next->ddX);
+		float CurveForce = PlayerSpeed*TWEAK(50.0f)*LerpM(ActiveRoadList.First->ddX, CurveForceT, ActiveRoadList.First->Next->ddX);
 		
 		PlayerBaseXOffset += CurveForce;
 		
 		float OffRoadLimit = TWEAK(1000.0f);
-		PlayerBaseXOffset = Clamp(-OffRoadLimit, PlayerBaseXOffset, OffRoadLimit);
+		PlayerBaseXOffset = ClampM(-OffRoadLimit, PlayerBaseXOffset, OffRoadLimit);
 		
 		
 		
@@ -1678,11 +1689,11 @@ And then the game loads in the textures with mipmaps included.
 		crosshair.state = inImage ? 1 : 0;
 		
 		if(isLeftPressed && inImage) {
-			Vector2 Offset;
-			Offset.x = 0.0f;
-			Offset.y = -60.0f;
-			if(!lazer.isRunning) {
-				lazer.start(PlayerCarP + Offset, GetMousePosition());
+			if(!lazer_l.isRunning) {
+				lazer_l.start(&car.left_lazer_pos, GetMousePosition());
+			}
+			if(!lazer_r.isRunning) {
+				lazer_r.start(&car.right_lazer_pos, GetMousePosition());
 			}
 		}
 		lazer.draw(dtForFrame);
