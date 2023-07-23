@@ -957,7 +957,74 @@ main()
 	
 	Texture2D cross_hair_texture = LoadTexture("crosshair.png");
 	SetTextureFilter(cross_hair_texture, TEXTURE_FILTER_BILINEAR);
+
+	struct _dithered_horizon {
+		Vector2 position = {0, 0};
+		Vector2 anchor = {400, 129};
+		Texture2D dithered_horizon_texture = LoadTexture("dithered_horizon.png");
+
+		float displacement_amount = -2;
+		float runtime = 0.0f;
+		void draw(float delta_time) {
+			runtime += delta_time;
+
+			float cur_displacement = sin(runtime * 2) * displacement_amount;
+
+			rlPushMatrix();
+			rlTranslatef( position.x, position.y, 0);
+			rlTranslatef(-anchor.x, -anchor.y, 0);
+			DrawTexture(dithered_horizon_texture, 0, cur_displacement, WHITE);
+			rlPopMatrix();
+		}
+	} dithered_horizon = {.position = {ScreenWidth/2.f, ScreenHeight/2.f}};
 	
+	struct _Crosshair {
+		Vector2 position = {0.0f, 0.0f};
+		float frame_duration = 0.4f;
+		float runtime = 0.0f;
+		float orientation = 0.0f;
+		float scale = 1.0f;
+		int state = 0;
+		
+		struct _Frame {
+			Vector2 anchor;
+			Texture2D texture;
+		} frames[2] = { 
+			{ {28,21}, LoadTexture("crosshair0.png")}, 
+			{ {26,27}, LoadTexture("crosshair1.png")}
+		};
+		
+		int calculate_current_frame() {
+			return state % 2;
+		}
+
+		
+		// MARK1
+		void draw(float delta_time) {
+			runtime += delta_time;
+			_Frame current_frame = frames[calculate_current_frame()];
+			const Vector2 &anchor = current_frame.anchor;
+
+			if(state == 1) {
+				orientation = runtime * 72;
+			} else {
+				orientation = 0;
+			}
+			
+			rlPushMatrix();
+			
+			rlTranslatef(position.x, position.y, 0);
+			rlRotatef(orientation, 0, 0, 1);
+			rlScalef(scale,scale, 1.f);
+			rlTranslatef(-anchor.x,- anchor.y, 0);
+			
+			DrawTexture(current_frame.texture, 0, 0, WHITE);
+			
+			rlPopMatrix();
+		}
+		
+	} crosshair;
+
 	struct _FireAnimation {
 		Vector2 position = {0.0f, 0.0f};
 		float frame_duration = 0.1f;
@@ -1318,7 +1385,10 @@ And then the game loads in the textures with mipmaps included.
 		ClearBackground(PINK);
 		DrawRectangleGradientV(0, 0, ScreenWidth, ScreenHeight/2, SkyGradientCol0, SkyGradientCol1);
 		DrawFPS(30, 10);
-		
+
+		// horizon
+		dithered_horizon.draw(dtForFrame);
+
 		//NOTE(moritz): Parallax background
 		Vector2 SunsetP;
 		SunsetP.x = accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
@@ -1374,9 +1444,11 @@ And then the game loads in the textures with mipmaps included.
 		
 		// Draw the cross hair
 		
-		Vector2 crosshair_pos = {(float) GetMouseX(), (float) GetMouseY()};
-		Vector2 crosshair_anchor = {cross_hair_texture.width / 2.f, cross_hair_texture.height / 2.f};
-		DrawTextureEx(cross_hair_texture, crosshair_pos - crosshair_anchor , 0, 1, WHITE);
+		// Vector2 crosshair_anchor = {cross_hair_texture.width / 2.f, cross_hair_texture.height / 2.f};
+		// wTextureEx(cross_hair_texture, crosshair_pos - crosshair_anchor , 0, 1, WHITE);
+
+		crosshair.position = {(float) GetMouseX(), (float) GetMouseY()};
+		crosshair.draw(dtForFrame);
 		
 		//---------------------------------------------------------
 		
