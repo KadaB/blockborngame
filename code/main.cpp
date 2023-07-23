@@ -949,18 +949,19 @@ main()
 		}
 
 		// MARK1
-		void draw(float delta_time) {
+		void draw(float delta_time, float scale_mult) {
 			runtime += delta_time;
 			_Frame current_frame = frames[calculate_current_frame()];
 			const Vector2 &anchor = current_frame.anchor;
 
 			// let the fire oscillate a bit
-			float osc_scale = scale * (1+ (.3 * (double)rand() / (double)RAND_MAX ));
+			float osc_scale_x = scale * scale_mult * (1+ (.3 * (double)rand() / (double)RAND_MAX ));
+			float osc_scale_y = scale * scale_mult * (1+ (.4 * (double)rand() / (double)RAND_MAX ));
 			rlPushMatrix();
 
 			rlTranslatef(position.x, position.y, 0);
 			rlRotatef(orientation, 0, 0, 1);
-			rlScalef(osc_scale,osc_scale, 1.f);
+			rlScalef(osc_scale_x,osc_scale_y, 1.f);
 			rlTranslatef(-anchor.x,- anchor.y, 0);
 
 			DrawTexture(current_frame.texture, 0, 0, WHITE);
@@ -1013,13 +1014,13 @@ main()
 			rlRotatef(orientation, 0, 0, 1);
 			rlTranslatef(-anchor.x,- anchor.y, 0);
 
-			fire_animation1.scale = Lerp(1.f,.5+ Clamp(-.5f, orientation / (CAR_TILT*2), .5),2.f);
+			float fire1_tmp_scale = Lerp(fire_animation1.scale,.5+ Clamp(-.5f, orientation / (CAR_TILT*2), .5),2.f);
 			fire_animation1.orientation = 2*orientation;//Clamp(0, orientation, 15)*2.;
-			fire_animation1.draw(delta_time);
+			fire_animation1.draw(delta_time, fire1_tmp_scale);
 
-			fire_animation2.scale = Lerp(1.f, .5+Clamp(-.5f, orientation / (-CAR_TILT*2), .5),2.f);
+			float fire2_tmp_scale = Lerp(1.f, .5+Clamp(-.5f, orientation / (-CAR_TILT*2), .5),2.f);
 			fire_animation2.orientation = 2*orientation;//Clamp(-15, orientation, 0)*2.;
-			fire_animation2.draw(delta_time);
+			fire_animation2.draw(delta_time, fire2_tmp_scale);
 			
 			DrawTexture(texture, 0, 0, WHITE);
 			rlPopMatrix();
@@ -1159,10 +1160,21 @@ And then the game loads in the textures with mipmaps included.
 		
 		float PlayerAcceleration = TWEAK(10.0f)*dtForFrame;
 		
-		if(IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
+		if(IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) {
 			PlayerSpeed += PlayerAcceleration;
-		if(IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
+			car.fire_animation1.scale = 1.1;
+			car.fire_animation2.scale = 1.1;
+		}
+		else {
+			car.fire_animation1.scale = .7;
+			car.fire_animation2.scale = .7;
+		}
+
+		if(IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) {
 			PlayerSpeed -= PlayerAcceleration;
+			car.fire_animation1.scale = .2;
+			car.fire_animation2.scale = .2;
+		}
 		
 		if(PlayerSpeed <= 0.0f)
 			PlayerSpeed = 0.0f;
