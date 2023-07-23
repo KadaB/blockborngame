@@ -1696,7 +1696,9 @@ And then the game loads in the textures with mipmaps included.
 				lazer_r.start(&car.right_lazer_pos, GetMousePosition());
 			}
 		}
-		lazer.draw(dtForFrame);
+
+		lazer_l.draw(dtForFrame);
+		lazer_r.draw(dtForFrame);
 		
 		car.position = PlayerCarP;
 		car.draw(dtForFrame);
