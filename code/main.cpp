@@ -1516,7 +1516,7 @@ And then the game loads in the textures with mipmaps included.
 		else {
 			const float zero_epsilon = 1e-3f;
 			lenkVelocity += -1*Sign(lenkVelocity)*lenkAcceleration;
-			lenkVelocity = abs(lenkVelocity) < zero_epsilon ? 0.f : lenkVelocity;
+			lenkVelocity = fabs(lenkVelocity) < zero_epsilon ? 0.f : lenkVelocity;
 		}
 		
 		lenkVelocity = Clamp(-max_steer, lenkVelocity, max_steer);
@@ -1678,8 +1678,11 @@ And then the game loads in the textures with mipmaps included.
 		crosshair.state = inImage ? 1 : 0;
 		
 		if(isLeftPressed && inImage) {
+			Vector2 Offset;
+			Offset.x = 0.0f;
+			Offset.y = -60.0f;
 			if(!lazer.isRunning) {
-				lazer.start(PlayerCarP + (Vector2){0, -60}, GetMousePosition());
+				lazer.start(PlayerCarP + Offset, GetMousePosition());
 			}
 		}
 		lazer.draw(dtForFrame);
