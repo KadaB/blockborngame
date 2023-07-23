@@ -13,9 +13,13 @@
 
 #define TWEAK_TABLE_SIZE 256
 
+//NOTE(moritz): This macro only works if size of Array is known at compile time
 #define ArrayCount(Array) (sizeof(Array)/sizeof((Array)[0]))
 
 #define CAR_TILT 15.f
+
+#define WEB_BUILD
+
 struct tweak_entry
 {
 	bool IsInitialised;
@@ -287,10 +291,13 @@ Append(link_list *List, link *Link)
 	List->Last = (List->Last ? List->Last->Next : List->First) = Link;
 }
 
+#ifndef WEB_BUILD
 #define TWEAK(Value) TweakValue(Value, __LINE__)
-//#define TWEAK(Value) Value
+#else
+#define TWEAK(Value) Value
+#endif
 
-//NOTE(moritz): Source: https://gist.github.com/badboy/6267743 (Rober Jenkins 32 bit integer hash function)
+//NOTE(moritz): Source: https://gist.github.com/badboy/6267743 (Robert Jenkins 32 bit integer hash function)
 unsigned int
 UIntHash( unsigned int a)
 {
@@ -346,6 +353,7 @@ ReloadSourceCode(char **SourceCode, link_pool *LinkPool, link_list *LinkList)
 	
 	int SourceCodeByteCount = GetFileLength("../code/main.cpp") + 1;
 	
+	//NOTE(moritz): Debug check
 	unsigned int LineCount = 0;
 	
 	//NOTE(moritz):Split into lines for easier parsing
@@ -402,7 +410,6 @@ ReloadSourceCode(char **SourceCode, link_pool *LinkPool, link_list *LinkList)
 		}
 	}
 	
-	int Foo = 0;
 }
 
 float
@@ -652,11 +659,13 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	float fCurrentCenterOffsetX = 0.0f;
 	
 	//int DepthSampleIndex = 0;
+	//TODO(moritz): This can be modified for hills...
+	//Horizon line needs to get adjusted as well
 	float DepthSampleIndex = 0.0f;
 	
 	for(int DepthLineIndex = 0;
 		DepthLineIndex < DepthLineCount;
-		++DepthLineIndex, DepthSampleIndex += 0.9f)
+		++DepthLineIndex, DepthSampleIndex += 1.0f)
 	{
 		float fLineY = (float)DepthLineIndex;
 		
@@ -893,7 +902,7 @@ main()
 	float fScreenHeight = 450.0f;
 	
 	float fScreenCenterX = 0.5f*fScreenWidth + 0.5f;
-
+	
 	bool AudioIsInitialised = false;
 	
 	//TODO(moritz): Do we want to do this or do the d7Samura fatpixel filtering thing?
@@ -903,7 +912,6 @@ main()
 	InitWindow(ScreenWidth, ScreenHeight, "raylib");
 	SetTargetFPS(60);
 	
-	HideCursor();
 	//---------------------------------------------------------
 	
 	//NOTE(moritz): Load source code for tweak variables
@@ -925,17 +933,17 @@ main()
 	
 	Texture2D SunsetTexture = LoadTexture("sunset.png");
 	SetTextureFilter(SunsetTexture, TEXTURE_FILTER_BILINEAR);
-
+	
 	Texture2D cross_hair_texture = LoadTexture("crosshair.png");
 	SetTextureFilter(cross_hair_texture, TEXTURE_FILTER_BILINEAR);
 	
 	struct _FireAnimation {
-		Vector2 position = {0, 0};
-		float frame_duration = 0.1;
-		float runtime = 0;
-		float orientation = 0;
-		float scale = 2.0;
-
+		Vector2 position = {0.0f, 0.0f};
+		float frame_duration = 0.1f;
+		float runtime = 0.0f;
+		float orientation = 0.0f;
+		float scale = 2.0f;
+		
 		struct _Frame {
 			Vector2 anchor;
 			Texture2D texture;
@@ -943,81 +951,81 @@ main()
 			{ {11, 1}, LoadTexture("fire0.png")}, 
 			{ {22, 8}, LoadTexture("fire1.png")}
 		};
-
+		
 		int calculate_current_frame() {
 			return ((int)(runtime / frame_duration)) % 2;
 		}
-
+		
 		// MARK1
 		void draw(float delta_time, float scale_mult) {
 			runtime += delta_time;
 			_Frame current_frame = frames[calculate_current_frame()];
 			const Vector2 &anchor = current_frame.anchor;
-
+			
 			// let the fire oscillate a bit
 			float osc_scale_x = scale * scale_mult * (1+ (.3 * (double)rand() / (double)RAND_MAX ));
 			float osc_scale_y = scale * scale_mult * (1+ (.4 * (double)rand() / (double)RAND_MAX ));
 			rlPushMatrix();
-
+			
 			rlTranslatef(position.x, position.y, 0);
 			rlRotatef(orientation, 0, 0, 1);
 			rlScalef(osc_scale_x,osc_scale_y, 1.f);
 			rlTranslatef(-anchor.x,- anchor.y, 0);
-
+			
 			DrawTexture(current_frame.texture, 0, 0, WHITE);
-
+			
 			rlPopMatrix();
 		}
-
+		
 	} fire_animation1, fire_animation2;
-
+	
 	struct _Car {
 		Vector2 position = {0, 0};
 		float orientation = 0.f;
 		float scale = 1.f;
 		Texture2D texture = LoadTexture("car_plain.png");
-
+		
 		float runtime = 0.f;
 		float lift_amount = 5;
-
+		
 		struct _shadow {
 			Vector2 anchor = {72, -15};
 			Texture2D shadow_tex = LoadTexture("car_shadow.png");
-
+			
 			void draw(float parent_orientation, float lift) {
 				rlPushMatrix();
-					rlRotatef(-parent_orientation, 0, 0, 1);
-					rlTranslatef(-anchor.x,-anchor.y, 0);
-					DrawTexture(shadow_tex, 0, -lift*1.5+5, WHITE);
+				rlRotatef(-parent_orientation, 0, 0, 1);
+				rlTranslatef(-anchor.x,-anchor.y, 0);
+				DrawTexture(shadow_tex, 0, -lift*1.5+5, WHITE);
 				rlPopMatrix();
 			}
 		} shadow;
-
+		
 		Vector2 anchor = {75, 68};
-
+		
 		_FireAnimation fire_animation1 = {7, 72 };
 		_FireAnimation fire_animation2 = {142, 72};
-
+		
 		void draw(float delta_time) {
-
+			
 			runtime += delta_time;
-
+			
 			float lift = lift_amount * sin(runtime*3);
-
+			
 			rlPushMatrix();
-
+			
 			rlTranslatef(position.x, position.y + lift, 0);
 			rlScalef(scale, scale, 1.f);
-
+			
 			shadow.draw(orientation, lift);
-
+			
 			rlRotatef(orientation, 0, 0, 1);
 			rlTranslatef(-anchor.x,- anchor.y, 0);
-
+			
 			float fire1_tmp_scale = Lerp(fire_animation1.scale,.5+ Clamp(-.5f, orientation / (CAR_TILT*2), .5),2.f);
 			fire_animation1.orientation = 2*orientation;//Clamp(0, orientation, 15)*2.;
 			fire_animation1.draw(delta_time, fire1_tmp_scale);
-
+			
 			float fire2_tmp_scale = Lerp(1.f, .5+Clamp(-.5f, orientation / (-CAR_TILT*2), .5),2.f);
 			fire_animation2.orientation = 2*orientation;//Clamp(-15, orientation, 0)*2.;
 			fire_animation2.draw(delta_time, fire2_tmp_scale);
@@ -1026,7 +1034,7 @@ main()
 			rlPopMatrix();
 		}
 	} car;
-
+	
 	/*
 TODO(moritz): If we want to use mipmaps for our
 billboards (I think we should), then it seems like
@@ -1127,6 +1135,7 @@ And then the game loads in the textures with mipmaps included.
 	
 	//---------------------------------------------------------
 	
+#if 0
 	//TODO(moritz): Very gross D:
 	bool FirstBaseWrapped = true;
 	float FirstLUTBaseY  = 0.0f;
@@ -1134,6 +1143,7 @@ And then the game loads in the textures with mipmaps included.
 	float SecondLUTBaseY = 1.0f;
 	
 	int PermInitialNormalIndex = -1;
+#endif
 	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
@@ -1143,6 +1153,10 @@ And then the game loads in the textures with mipmaps included.
 		//Otherwise the browser (Chrome) complains... Audio init after user input
 		if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
 		{
+			//NOTE(moritz): For web builds, disable cursor has to be used
+			if(!IsCursorHidden())
+				DisableCursor();
+			
 			if(!AudioIsInitialised)
 			{
 				AudioIsInitialised = true;
@@ -1169,7 +1183,7 @@ And then the game loads in the textures with mipmaps included.
 			car.fire_animation1.scale = .7;
 			car.fire_animation2.scale = .7;
 		}
-
+		
 		if(IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) {
 			PlayerSpeed -= PlayerAcceleration;
 			car.fire_animation1.scale = .2;
@@ -1211,9 +1225,9 @@ And then the game loads in the textures with mipmaps included.
 			car.orientation = CAR_TILT;
 		}
 		else {
-		  car.orientation = 0;
+			car.orientation = 0;
 		}
-
+		
 		//NOTE(moritz): Update active segments position
 		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
 		
@@ -1251,8 +1265,6 @@ And then the game loads in the textures with mipmaps included.
 			InitSegment(NewSegment, ActiveRoadList.Last, &RoadEntropy, MaxDistance);
 			
 			Append(&ActiveRoadList, NewSegment);
-			
-			FirstBaseWrapped = true;
 		}
 		
 		float CurveForceT = 1.0f - ActiveRoadList.First->Next->Position;;
@@ -1365,7 +1377,7 @@ And then the game loads in the textures with mipmaps included.
 		DrawRectangleV(TestP, TestSize, PURPLE);
 		
 #endif
-
+		
 		// Draw the cross hair
 		
 		Vector2 crosshair_pos = {(float) GetMouseX(), (float) GetMouseY()};
@@ -1383,8 +1395,10 @@ And then the game loads in the textures with mipmaps included.
 		
 		
 		//---------------------------------------------------------
+#ifndef WEB_BUILD
 		ReloadSourceCode(&SourceCode, &LinkPool, &LinkList);
 		UpdateTweakTable(&LinkList);
+#endif
 	}
 	
 	CloseWindow();
