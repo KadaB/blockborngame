@@ -212,7 +212,7 @@ float RoadPresets[] =
 	0.0f,
 	800.0f/(225.0f*226.0f),
 	-800.0f/(225.0f*226.0f),
-	2500.0f/(225.0f*226.0f)
+	/*2500.0f/(225.0f*226.0f)*/
 };
 
 struct road_pool
@@ -669,7 +669,7 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 	{
 		float fLineY = (float)DepthLineIndex;
 		
-		float fRoadWidth   = BaseRoadHalfWidth*DepthLines[(int)DepthSampleIndex/*DepthLineIndex*/].Scale + 20.0f;
+		float fRoadWidth   = BaseRoadHalfWidth*DepthLines[(int)DepthSampleIndex/*DepthLineIndex*/].Scale/* + 20.0f*/;
 		float fStripeWidth = BaseStripeHalfWidth*DepthLines[(int)DepthSampleIndex/*DepthLineIndex*/].Scale;
 		
 		float fYLineNorm = fLineY/fDepthLineCount;
@@ -741,15 +741,12 @@ have to be done over and over again for each one)
 #if 1
 void
 DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
-			  /*float Curviness, */float fScreenWidth, float fScreenHeight, depth_line *DepthLines,
-			  int DepthLineCount, float CameraHeight, road_list *ActiveRoadList,/*road_segment BottomSegment,
-			  road_segment NextSegment, */bool DebugText = false)
+			  float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount, 
+			  float CameraHeight, road_list *ActiveRoadList, float PlayerBaseXOffset, bool DebugText = false)
 {
-	//float dX = 0.0f;
-	float fCurrentCenterX     = fScreenWidth*0.5f + 0.5f; //NOTE(moritz): Road center line 
-	float BaseRoadHalfWidth   = fScreenWidth*0.5f;
-	float BaseStripeHalfWidth = 10.0f;
-	
+	float fDepthLineCount = (float)DepthLineCount;
+	float BaseRoadHalfWidth   = fScreenWidth*0.6f;
+	float AngleOfRoad = PlayerBaseXOffset/fDepthLineCount;
 	
 	//NOTE(moirtz): Test for "scaling in" distant billboards instead of popping them in...
 	//float ScaleInDistance = 10.0f;
@@ -760,7 +757,6 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	if(DebugText)
 		DrawText(TextFormat("TreeScaleInT: %f", ScaleInT), 20, 20, 10, RED);
 	
-	//float MaxDistance = (float)DepthLineCount;
 	float OneOverMaxDistance = 1.0f/MaxDistance;
 	float BasePDepth = Distance*OneOverMaxDistance;
 	
@@ -777,6 +773,9 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 		}
 	}
 	
+	if(BasePDepthLineIndex == -1)
+		return;
+	
 	//NOTE(moritz): Lerp the sprite scaling between the base depth line and the next closer one. 
 	//Use depth to determine t.
 	//TODO(moritz): Handle out of bounds!
@@ -792,7 +791,7 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	float Scale0 = DepthLines[BasePDepthLineIndex].Scale;
 	float Scale1 = DepthLines[BasePDepthLineIndex + 1].Scale;
 	
-	float DepthScale = Scale0 + t*(Scale1 - Scale0);
+	float DepthScale = Lerp(Scale0, t, Scale1);
 	
 	if(DebugText)
 		DrawText(TextFormat("TreeDepthScale: %f", DepthScale), 20, 30, 10, RED);
@@ -807,11 +806,12 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	
 	//NOTE(moritz): Where the sprite will be at the bottom of the Road
 	//float BasePOffsetX = BaseRoadHalfWidth + 300.0f + 0.5f*((float)Texture.width);
-	float BasePOffsetX = 3.0f*BaseRoadHalfWidth + 0.5f*((float)Texture.width);
+	float BasePOffsetX = 0.5f*((float)Texture.width) + TWEAK(300.0f);
+	float SpriteScale  = TWEAK(2.0f);
+	float SpriteVerticalTweak = TWEAK(0.15f);
 	
 	//NOTE(moritz): Some more lerping for the X part of BaseP. Taking into account curviness, angle of road and all that nonesense...
-	float fDepthLineCount = (float)DepthLineCount;
-	float AngleOfRoad = 1.0f;//fRoadBaseOffsetX/fDepthLineCount;
+	//float fDepthLineCount = (float)DepthLineCount;
 	
 	//TODO(moritz): Figure out which road segment we are in
 	//Used closed formula to determine 
@@ -820,67 +820,63 @@ DrawBillboard(Texture2D Texture, float Distance, float MaxDistance,
 	
 	road_segment *CurrentSegment = ActiveRoadList->First;//BottomSegment;
 	
-	float fCurveStartX = fCurrentCenterX;
+	float dX = 0.0f;
+	float fCurrentCenterOffsetX = 0.0f;
 	
-#if 0
+	float X0 = 0.0f;
+	float X1 = 0.0f;
 	
-	//if(Distance > NextSegment.Position)
-	if(fBasePDepthLineIndex > NextSegment.Position)
+	int OnePastLastDepthLine = BasePDepthLineIndex + 1;
+	
+	for(int DepthLineIndex = 0;
+		DepthLineIndex < OnePastLastDepthLine;
+		++DepthLineIndex)
 	{
-		CurrentSegment = NextSegment;
+		float fLineY = (float)DepthLineIndex;
+		float fYLineNorm = fLineY/fDepthLineCount;
 		
-		//TODO(moritz): I suspect that this is wrong!
-		//This should be more like
-		fCurveStartX += BottomSegment.ddX*( (NextSegment.Position*(NextSegment.Position + 1.0f))*0.5f );
-		//fCurveStartX  += BottomSegment.EndRelPX; 
+		float fRoadWidth   = BaseRoadHalfWidth*DepthLines[DepthLineIndex].Scale/* + 20.0f*/;
+		float Blarg        = BasePOffsetX *DepthLines[DepthLineIndex].Scale;
 		
-		if(DebugText)
-			DrawText("In Next segment!", 20, 40, 10, RED);
+		if(CurrentSegment->Next)
+		{
+			if(fYLineNorm > CurrentSegment->Next->Position)
+				CurrentSegment = CurrentSegment->Next;
+		}
+		
+		dX += CurrentSegment->ddX;
+		fCurrentCenterOffsetX += dX;
+		
+		//NOTE(moritz): Made up damping... Seems better
+		float CurveDamping = sinf(fYLineNorm*0.5f*Pi32);
+		CurveDamping = Clamp(0.0f, CurveDamping, 1.0f);
+		fCurrentCenterOffsetX *= CurveDamping;
+		
+		float SteerOffset = AngleOfRoad*(fDepthLineCount - fLineY);
+		
+		if(DepthLineIndex == (OnePastLastDepthLine - 2))
+			X0 = 0.5f*fScreenWidth + fCurrentCenterOffsetX + SteerOffset + fRoadWidth + Blarg;
+		else if(DepthLineIndex == (OnePastLastDepthLine - 1))
+			X1 = 0.5f*fScreenWidth + fCurrentCenterOffsetX + SteerOffset + fRoadWidth + Blarg;
 	}
-	else
-	{
-		if(DebugText)
-			DrawText("In Bottom segment!", 20, 40, 10, RED);
-	}
-#endif
 	
-	
-	
-	float BillboardCurveAt = Max(fBasePDepthLineIndex, CurrentSegment.Position) - Min(CurrentSegment.Position, fBasePDepthLineIndex);
-	//float BillboardCurveAt = CurrentSegment.Position - fBasePDepthLineIndex;
-	
-	//float BillboardCurveAt = Distance - CurrentSegment.Position;
-	
-	if(DebugText)
-		DrawText(TextFormat("CurveAt: %f", BillboardCurveAt), 20, 50, 10, RED);
-	
-#if 1
-	float X0 = fCurveStartX + CurrentSegment.ddX*( (BillboardCurveAt*(BillboardCurveAt + 1.0f))*0.5f ) + BasePOffsetX*DepthScale;
-	float X1 = fCurveStartX + CurrentSegment.ddX*( ((BillboardCurveAt + 1)*(BillboardCurveAt + 1.0f + 1.0f))*0.5f ) + BasePOffsetX*DepthScale;
-#else
-	float X0 = fCurveStartX + CurrentSegment.ddX*( (float)(BasePDepthLineIndex*(BasePDepthLineIndex + 1))*0.5f ) + BasePOffsetX*DepthScale;
-	float X1 = fCurveStartX + CurrentSegment.ddX*( (float)((BasePDepthLineIndex + 1)*(BasePDepthLineIndex + 1 + 1))*0.5f ) + BasePOffsetX*DepthScale;
-#endif
 	
 	Vector2 TestSize = {5.0f, 5.0f};
 	
 	Vector2 BaseP = {};
-	BaseP.x = X0 + t*(X1 - X0) - AngleOfRoad*(fDepthLineCount - BasePScreenY);
+	BaseP.x = Lerp(X0, t, X1) /*- AngleOfRoad*(fDepthLineCount - BasePScreenY)*/;
 	BaseP.y = BasePScreenY;
 	
-#if 1
-	DrawRectangleV(BaseP, TestSize, RED);
-#endif
 	
 	//NOTE(moritz): Convert from BaseP to draw p... complying with raylib convention
 	Vector2 SpriteDrawP = {};
-	SpriteDrawP.x = BaseP.x - 0.5f*((float)Texture.width)*DepthScale*15.0f*ScaleInT;
-	SpriteDrawP.y = BaseP.y - ((float)Texture.height)*DepthScale*15.0f*ScaleInT;
+	SpriteDrawP.x = BaseP.x - 0.5f*((float)Texture.width)*DepthScale*SpriteScale*ScaleInT;
+	SpriteDrawP.y = BaseP.y - ((float)Texture.height)*DepthScale*SpriteScale*ScaleInT + SpriteVerticalTweak*(float)Texture.height*DepthScale*SpriteScale*ScaleInT;
 	
+	DrawTextureEx(Texture, SpriteDrawP, 0.0f, DepthScale*SpriteScale*ScaleInT, WHITE);
+	
+	DrawRectangleV(BaseP, TestSize, RED);
 	DrawRectangleV(SpriteDrawP, TestSize, BLACK);
-	
-	
-	DrawTextureEx(Texture, SpriteDrawP, 0.0f, DepthScale*15.0f*ScaleInT, WHITE);
 }
 #endif
 
@@ -940,7 +936,7 @@ main()
 	//---------------------------------------------------------
 	
 	//NOTE(moritz): Load textures
-	Texture2D TreeTexture = LoadTexture("tree.png");
+	Texture2D TreeTexture = LoadTexture("building.png");
 	SetTextureFilter(TreeTexture, TEXTURE_FILTER_BILINEAR);
 	
 	Texture2D CarTexture = LoadTexture("player_car.png");
@@ -992,7 +988,9 @@ main()
 			rlPopMatrix();
 		}
 		
-	} fire_animation1, fire_animation2;
+	};
+	
+	
 	
 	struct _Car {
 		Vector2 position = {0, 0};
@@ -1049,6 +1047,12 @@ main()
 			rlPopMatrix();
 		}
 	} car;
+	
+	SetTextureWrap(car.fire_animation1.frames[0].texture, TEXTURE_WRAP_CLAMP);
+	SetTextureWrap(car.fire_animation1.frames[1].texture, TEXTURE_WRAP_CLAMP);
+	
+	SetTextureWrap(car.fire_animation2.frames[0].texture, TEXTURE_WRAP_CLAMP);
+	SetTextureWrap(car.fire_animation2.frames[1].texture, TEXTURE_WRAP_CLAMP);
 	
 	/*
 TODO(moritz): If we want to use mipmaps for our
@@ -1148,18 +1152,6 @@ And then the game loads in the textures with mipmaps included.
 	float TreeDistance = MaxDistance;
 	//road_segment TreeSegment = GetSegmentAtDistance(TreeDistance, BottomSegment, NextSegment);
 	
-	//---------------------------------------------------------
-	
-#if 0
-	//TODO(moritz): Very gross D:
-	bool FirstBaseWrapped = true;
-	float FirstLUTBaseY  = 0.0f;
-	bool SecondBaseWrapped = true;
-	float SecondLUTBaseY = 1.0f;
-	
-	int PermInitialNormalIndex = -1;
-#endif
-	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
 	while(!WindowShouldClose())
@@ -1185,7 +1177,8 @@ And then the game loads in the textures with mipmaps included.
 		
 		dtForFrame *= TWEAK(1.0f);
 		
-		//PlayerSpeed = TWEAK(20.0f);
+		//Max speed ~28.0f
+		PlayerSpeed = TWEAK(10.0f);
 		
 		float PlayerAcceleration = TWEAK(10.0f)*dtForFrame;
 		
@@ -1290,6 +1283,9 @@ And then the game loads in the textures with mipmaps included.
 		
 		PlayerBaseXOffset += CurveForce;
 		
+		float OffRoadLimit = TWEAK(1000.0f);
+		PlayerBaseXOffset = Clamp(-OffRoadLimit, PlayerBaseXOffset, OffRoadLimit);
+		
 		//NOTE(moritz): Update billboard positions
 		TreeDistance -= dPlayerP;
 		if((TreeDistance < 0.0f)/* && NewBottomSegment*/) //TODO(moritz): poor man's way of syncing tree spawn with segment swap to avoid weird bug
@@ -1299,7 +1295,7 @@ And then the game loads in the textures with mipmaps included.
 		
 		ClearBackground(PINK);
 		DrawRectangleGradientV(0, 0, ScreenWidth, ScreenHeight/2, SkyGradientCol0, SkyGradientCol1);
-		//DrawFPS(10, 10);
+		DrawFPS(30, 10);
 		
 		//NOTE(moritz): Parallax background
 		Vector2 SunsetP;
@@ -1313,6 +1309,13 @@ And then the game loads in the textures with mipmaps included.
 		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
 				 &ActiveRoadList, PlayerBaseXOffset);
 		
+#if 1
+		if(TreeDistance > 0.0f)
+			DrawBillboard(TreeTexture, TreeDistance, MaxDistance,
+						  fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
+						  CameraHeight,  &ActiveRoadList, PlayerBaseXOffset);
+#endif
+		
 		//NOTE(moritz): Draw player car
 		Vector2 PlayerCarP = 
 		{
@@ -1323,6 +1326,8 @@ And then the game loads in the textures with mipmaps included.
 		car.position = PlayerCarP;
 		car.draw(dtForFrame);
 		
+		
+#if 0
 		//NOTE(moritz): Visualise where the segments are at...
 		for(road_segment *Segment = ActiveRoadList.First;
 			Segment;
@@ -1343,54 +1348,6 @@ And then the game loads in the textures with mipmaps included.
 			
 			DrawLineEx(MarkerStart, MarkerEnd, 4.0f, LineColor);
 		}
-		
-		
-#if 1
-		if(TreeDistance > 0.0f)
-			DrawBillboard(TreeTexture, TreeDistance, MaxDistance,
-						  fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-						  CameraHeight,  &ActiveRoadList,
-						  /*BottomSegment, NextSegment,*/ true);
-#endif
-		
-		//NOTE(moritz): Debug stuff
-		float TestX = fScreenWidth*0.5f + 0.5f;
-#if 0
-		float TestdX = 0.0f;
-		road_segment CurrentSegment = BottomSegment;
-		for(int DepthLineIndex = 0;
-			DepthLineIndex < DepthLineCount;
-			++DepthLineIndex)
-		{
-			float fDepthLineIndex = (float)DepthLineIndex;
-			if(fDepthLineIndex > NextSegment.Position)
-			{
-				CurrentSegment = NextSegment;
-			}
-			
-			TestdX += CurrentSegment.ddX;
-			TestX += TestdX;
-		}
-		
-		float OtherTestX = fScreenWidth*0.5f + 0.5f;
-		OtherTestX += BottomSegment.ddX*( (NextSegment.Position*(NextSegment.Position + 1.0f))*0.5f );
-		float TestXAt = fDepthLineCount - NextSegment.Position;
-		OtherTestX += NextSegment.ddX*( (TestXAt*(TestXAt + 1.0f))*0.5f );
-#endif
-		
-#if 0
-		Vector2 TestSize = {5.0f, 5.0f};
-		
-		Vector2 TestP = {};
-		TestP.x = TestX;
-		TestP.y = fDepthLineCount;
-		DrawRectangleV(TestP, TestSize, PINK);
-		
-		Vector2 OtherTestP = {};
-		TestP.x = OtherTestX;
-		TestP.y = fDepthLineCount;
-		DrawRectangleV(TestP, TestSize, PURPLE);
-		
 #endif
 		
 		// Draw the cross hair
