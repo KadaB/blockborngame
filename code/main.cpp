@@ -909,7 +909,7 @@ main()
 	
 	float fScreenWidth  = 800.0f;
 	float fScreenHeight = 450.0f;
-	
+
 	float fScreenCenterX = 0.5f*fScreenWidth + 0.5f;
 	
 	bool AudioIsInitialised = false;
@@ -1151,6 +1151,8 @@ And then the game loads in the textures with mipmaps included.
 	
 	float TreeDistance = MaxDistance;
 	//road_segment TreeSegment = GetSegmentAtDistance(TreeDistance, BottomSegment, NextSegment);
+
+	float lenkVelocity = 0.f;
 	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
@@ -1178,7 +1180,7 @@ And then the game loads in the textures with mipmaps included.
 		dtForFrame *= TWEAK(1.0f);
 		
 		//Max speed ~28.0f
-		PlayerSpeed = TWEAK(10.0f);
+		// PlayerSpeed = TWEAK(10.0f);
 		
 		float PlayerAcceleration = TWEAK(10.0f)*dtForFrame;
 		
@@ -1224,17 +1226,27 @@ And then the game loads in the textures with mipmaps included.
 		float MinSteering = TWEAK(10.0f);
 		
 		float SteerFactor = Lerp(MaxSteerFactor, SteerFactorT, MinSteerFactor);
+
+		const float steer_speed = 100.f;
+		const float max_steer = 50.f;
+		float lenkAcceleration = steer_speed * dtForFrame;
 		if(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
-			PlayerBaseXOffset += Max(dPlayerP*SteerFactor, MinSteering);
+			// PlayerBaseXOffset += Max(dPlayerP*SteerFactor, MinSteering);
 			car.orientation = -CAR_TILT;
+			lenkVelocity = Max(lenkVelocity, 0) + lenkAcceleration;
 		}
 		else if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) {
-			PlayerBaseXOffset -= Max(dPlayerP*SteerFactor, MinSteering);
+			// PlayerBaseXOffset -= Max(dPlayerP*SteerFactor, MinSteering);
 			car.orientation = CAR_TILT;
+			lenkVelocity = Min(lenkVelocity, 0) - lenkAcceleration;
 		}
 		else {
-			car.orientation = 0;
+			lenkVelocity += -1*Sign(lenkVelocity)*lenkAcceleration ;
 		}
+
+		lenkVelocity = Clamp(-max_steer, lenkVelocity, max_steer);
+		car.orientation = -lenkVelocity / max_steer * 15.f;
+		PlayerBaseXOffset += lenkVelocity*SteerFactor * dtForFrame;
 		
 		//NOTE(moritz): Update active segments position
 		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
