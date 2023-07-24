@@ -759,7 +759,7 @@ struct billboard
 
 struct thing
 {
-	bool IsDriving; //NOTE(moritz): Is driving on road
+	bool IsAlien;
 	
 	float Distance;
 	float XOffset;
@@ -771,24 +771,38 @@ struct thing
 	
 	Color Tint;
 	
+	
+	//NOTE(moritz): Only relevant for the current frame
+	bool DrawMe;
+	
+	//NOTE(moritz): Shooting
+	Vector2 FramePosition;
+	float   FrameScale;
+	
+	//NOTE(moritz): Collision
+	Vector2 FrameBaseP;
+	
 	billboard *Billboard;
 };
 
-#if 1
+
+
 void
-DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Distance, */float MaxDistance,
-			  float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount, 
-			  float CameraHeight, road_list *ActiveRoadList, float PlayerBaseXOffset, bool DebugText = false)
+DetermineThingFrameProperties(billboard *Billboard, thing *Thing, float MaxDistance,
+							  float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount, 
+							  float CameraHeight, road_list *ActiveRoadList, float PlayerBaseXOffset, bool DebugText = false)
 {
 	float fDepthLineCount = (float)DepthLineCount;
 	float BaseRoadHalfWidth   = fScreenWidth*0.6f;
 	float AngleOfRoad = PlayerBaseXOffset/fDepthLineCount;
 	
-	if(Thing->Distance > MaxDistance)
-		return;
+	Thing->DrawMe = true;
 	
-	//if(Thing->RoadSide == -1.0f)
-	//int Foo = 0;
+	if(Thing->Distance > MaxDistance)
+	{
+		Thing->DrawMe = false;
+		return;
+	}
 	
 	//NOTE(moirtz): Test for "scaling in" distant billboards instead of popping them in...
 	//float ScaleInDistance = 10.0f;
@@ -816,7 +830,10 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 	}
 	
 	if(BasePDepthLineIndex == -1)
+	{
+		Thing->DrawMe = false;
 		return;
+	}
 	
 	//NOTE(moritz): Lerp the sprite scaling between the base depth line and the next closer one. 
 	//Use depth to determine t.
@@ -912,7 +929,7 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 	}
 	
 	
-	Vector2 TestSize = {5.0f, 5.0f};
+	
 	
 	Vector2 BaseP = {};
 	BaseP.x = LerpM(X0, t, X1);
@@ -924,15 +941,38 @@ DrawBillboard(billboard *Billboard, thing *Thing,/*Texture2D Texture, float Dist
 	SpriteDrawP.x = BaseP.x - 0.5f*((float)CurrentTexture.width)*DepthScale*SpriteScale*ScaleInT;
 	SpriteDrawP.y = BaseP.y - ((float)CurrentTexture.height)*DepthScale*SpriteScale*ScaleInT + SpriteVerticalTweak*(float)CurrentTexture.height*DepthScale*SpriteScale*ScaleInT;
 	
+#if 0
 	DrawTextureEx(CurrentTexture, SpriteDrawP, 0.0f, DepthScale*SpriteScale*ScaleInT, Thing->Tint/*WHITE*/);
+#endif
+	
+	Thing->FrameBaseP = BaseP;
+	Thing->FramePosition = SpriteDrawP;
+	Thing->FrameScale = DepthScale*SpriteScale*ScaleInT;
+	
+}
+
+void
+DrawBillboard(billboard *Billboard, thing *Thing)
+{
+	if(!Thing->DrawMe)
+		return;
+	
+	//NOTE(moritz): In case of vehicle either left or right is fine
+	Texture2D CurrentTexture = Billboard->TextureRight;
+	
+	if(Thing->RoadSide == -1.0f)
+		CurrentTexture = Billboard->TextureLeft;
+	else if(Thing->RoadSide == 1.0f)
+		CurrentTexture = Billboard->TextureRight;
+	
+	DrawTextureEx(CurrentTexture, Thing->FramePosition, 0.0f, Thing->FrameScale, Thing->Tint);
 	
 #if 0
-	//NOTE(moritz): Debug vis
-	DrawRectangleV(BaseP, TestSize, RED);
-	DrawRectangleV(SpriteDrawP, TestSize, BLACK);
+	Vector2 TestSize = {5.0f, 5.0f};
+	DrawRectangleV(Thing->FrameBaseP, TestSize, RED);
+	DrawRectangleV(Thing->FramePosition, TestSize, BLACK);
 #endif
 }
-#endif
 
 inline void
 InitSegment(road_segment *Segment, road_segment *PrevSegment, random_series *Entropy, float MaxDistance)
@@ -953,8 +993,15 @@ InitSegment(road_segment *Segment, road_segment *PrevSegment, random_series *Ent
 }
 
 
-bool isImageClicked(const Vector2 & image_position, const Image & query_image) {
-	Vector2 in_image_pos = GetMousePosition() - image_position;
+bool isImageClicked(const Vector2 & image_position, const float & image_scale, const Image & query_image) {
+	
+	float OneOverImageScale = 0.0f;
+	if(image_scale != 0.0f)
+		OneOverImageScale = 1.0f/image_scale;
+	
+	Vector2 in_image_pos = (GetMousePosition() - image_position)*OneOverImageScale;
+	
+	
 	
 	if(in_image_pos.x >= 0 && in_image_pos.x < query_image.width
 	   && in_image_pos.y >= 0 && in_image_pos.y < query_image.height) {
@@ -1019,6 +1066,12 @@ main()
 	Texture2D RamenShopLeftTexture = LoadTexture("building_left.png");
 	SetTextureFilter(RamenShopLeftTexture, TEXTURE_FILTER_BILINEAR);
 	
+	Texture2D SkyscraperRightTexture = LoadTexture("skyscraper_right.png");
+	SetTextureFilter(SkyscraperRightTexture, TEXTURE_FILTER_BILINEAR);
+	
+	Texture2D SkyscraperLeftTexture = LoadTexture("skyscraper_left.png");
+	SetTextureFilter(SkyscraperLeftTexture, TEXTURE_FILTER_BILINEAR);
+	
 	Texture2D LanternLeftTexture = LoadTexture("lantern_left.png");
 	SetTextureFilter(LanternLeftTexture, TEXTURE_FILTER_BILINEAR);
 	
@@ -1037,6 +1090,18 @@ main()
 	
 	Texture2D CivilianTexture = LoadTexture("civil_car.png");
 	SetTextureFilter(CivilianTexture, TEXTURE_FILTER_BILINEAR);
+	
+	Texture2D AlienTexture = LoadTexture("alien.png");
+	Image AlienImage = LoadImageFromTexture(AlienTexture);
+	//SetTextureFilter(AlienTexture, TEXTURE_FILTER_N);
+	
+	//NOTE(moritz): back to front
+	Texture2D SkylineTextures[5];
+	SkylineTextures[0] = LoadTexture("city0.png");
+	SkylineTextures[1] = LoadTexture("city1.png");
+	SkylineTextures[2] = LoadTexture("city2.png");
+	SkylineTextures[3] = LoadTexture("city3.png");
+	SkylineTextures[4] = LoadTexture("city4.png");
 	
 	struct _dithered_horizon {
 		Vector2 position = {0, 0};
@@ -1148,33 +1213,33 @@ main()
 		
 	};
 	
-
+	
 	struct _Lazer {
 		Vector2 end_position = {0.f, 0.f};
 		Vector2 *start_position = &end_position;
-
+		
 		Vector2 normal = {0, 0};
 		float runtime = 0.f;
 		float spread = 50.f;
 		float animation_length = .5f;
-
+		
 		bool isRunning = false;
-
+		
 		void start(Vector2 *start_pos, Vector2 end_pos) {
 			start_position = start_pos;
 			end_position = end_pos;
 			Vector2 line = NOZ(end_position - *start_position);		
 			normal = {-line.y, line.x};
-
+			
 			runtime = 0;
 			isRunning = true;
 		}
-
+		
 		void draw(float delta_time) {
 			if(!isRunning) return;
-
+			
 			runtime += delta_time;
-
+			
 			if(runtime < animation_length) {
 				if(runtime > .1) {
 					float animation_runtime = ClampM(0, animation_length, runtime);
@@ -1186,7 +1251,7 @@ main()
 				DrawLineEx(*start_position, end_position, 5, {255, 0, 0, 220});
 			}
 			else {
-			  isRunning = false;
+				isRunning = false;
 				runtime = 0;
 			}
 		}
@@ -1201,7 +1266,7 @@ main()
 		
 		float runtime = 0.f;
 		float lift_amount = 5;
-
+		
 		Vector2 left_lazer_anchor = {19, 7};
 		Vector2 right_lazer_anchor = {132, 7};
 		Vector2 left_lazer_pos = {0, 0};
@@ -1239,11 +1304,11 @@ main()
 			rlRotatef(orientation, 0, 0, 1);
 			rlTranslatef(-anchor.x,- anchor.y, 0);
 			
-
+			
 			Matrix matrix = rlGetMatrixTransform();
 			left_lazer_pos = Vector2Transform(left_lazer_anchor, matrix);
 			right_lazer_pos = Vector2Transform(right_lazer_anchor, matrix);
-
+			
 			float fire1_tmp_scale = LerpM(fire_animation1.scale,.5+ ClampM(-.5f, orientation / (CAR_TILT*2), .5),2.f);
 			fire_animation1.orientation = 2*orientation;//Clamp(0, orientation, 15)*2.;
 			fire_animation1.draw(delta_time, fire1_tmp_scale);
@@ -1324,6 +1389,18 @@ And then the game loads in the textures with mipmaps included.
 	RamenShopSprite.TextureLeft  = RamenShopLeftTexture;
 	RamenShopSprite.TextureRight = RamenShopRightTexture;
 	
+	billboard SkyscraperSprite;
+	SkyscraperSprite.SpriteScale = 10.0f;
+	SkyscraperSprite.SpriteVerticalTweak = 0.02f;
+	SkyscraperSprite.TextureLeft = SkyscraperLeftTexture;
+	SkyscraperSprite.TextureRight = SkyscraperRightTexture;
+	
+	billboard TreeSprite;
+	TreeSprite.SpriteScale = 6.0f;
+	TreeSprite.SpriteVerticalTweak = 0.06f;
+	TreeSprite.TextureLeft  = TreeTexture;
+	TreeSprite.TextureRight = TreeTexture;
+	
 	billboard LanternSprite;
 	LanternSprite.SpriteScale = 2.0f;
 	LanternSprite.SpriteVerticalTweak = 0.05f;
@@ -1332,10 +1409,16 @@ And then the game loads in the textures with mipmaps included.
 	LanternSprite.TextureRight = LanternRightTexture;
 	
 	billboard CivilianSprite;
-	CivilianSprite.SpriteScale = 1.2f;
+	CivilianSprite.SpriteScale = 1.5f;
 	CivilianSprite.SpriteVerticalTweak = 0.1f;
 	CivilianSprite.TextureRight = CivilianTexture;
 	CivilianSprite.TextureLeft = CivilianTexture;
+	
+	billboard AlienSprite;
+	AlienSprite.SpriteScale = 3.0f;
+	AlienSprite.SpriteVerticalTweak = 0.0f;
+	AlienSprite.TextureRight = AlienTexture;
+	AlienSprite.TextureLeft  = AlienTexture;
 	
 	//NOTE(moritz): Side bands.. 4?  32 per side band? times two for left/ right side
 	thing Things[256] = {};
@@ -1347,7 +1430,8 @@ And then the game loads in the textures with mipmaps included.
 	int ThingsPerSide = THINGS_PER_BAND*4;
 	
 	//NOTE(moritz): Right side
-	float CurrentDistance = MaxDistance;
+	float MaxPlaceDistance = -F32Max;
+	float CurrentDistance = 0.0f;
 	for(int ThingIndex = 0;
 		ThingIndex < ThingsPerSide;
 		++ThingIndex)
@@ -1362,26 +1446,48 @@ And then the game loads in the textures with mipmaps included.
 		
 		Things[ThingIndex].Tint = WHITE;
 		
+		float DistanceSpacing;
+		
 		if(SideBandIndex == 0)
+		{
 			Things[ThingIndex].Billboard = &LanternSprite;
+			DistanceSpacing = 5.0f + 10.0f*RandomUnilateral(&RoadEntropy);
+		}
+		else if(SideBandIndex == 1)
+		{
+			float TreeRand = 2.0f*RandomUnilateral(&RoadEntropy);
+			
+			Things[ThingIndex].XOffset = 400.0f*fSideBand + RandomBilateral(&RoadEntropy)*50.0f;
+			
+			if(TreeRand > 1.0f)
+				Things[ThingIndex].Billboard = &RamenShopSprite;
+			else
+				Things[ThingIndex].Billboard = &TreeSprite;
+			
+			DistanceSpacing = 10.0f + 30.0f*RandomUnilateral(&RoadEntropy);
+		}
 		else
 		{
-			Things[ThingIndex].XOffset = 400.0f*fSideBand + RandomBilateral(&RoadEntropy)*50.0f;
-			Things[ThingIndex].Billboard = &RamenShopSprite;
+			Things[ThingIndex].XOffset = 800.0f*fSideBand + RandomBilateral(&RoadEntropy)*200.0f;
+			Things[ThingIndex].Billboard = &SkyscraperSprite;
+			
+			DistanceSpacing = 30.0f + 40.0f*RandomUnilateral(&RoadEntropy);
 		}
 		
-		float DistanceSpacing = 10.0f + 30.0f*RandomUnilateral(&RoadEntropy);
-		CurrentDistance -= DistanceSpacing;
+		
+		CurrentDistance += DistanceSpacing;
+		
+		MaxPlaceDistance = Max(MaxPlaceDistance, CurrentDistance);
 		
 		//NOTE(moritz): Prep next band filling
 		if(((ThingIndex + 1)/THINGS_PER_BAND) > SideBandIndex)
-			CurrentDistance = MaxDistance;
+			CurrentDistance = 0.0f;
 	}
 	
 	//NOTE(moritz): Left side
 	SideBandIndex = 0;
 	int ThingIndexOffset = ThingsPerSide;
-	CurrentDistance = MaxDistance;
+	CurrentDistance = 0.0f;
 	for(int ThingIndex = ThingsPerSide;
 		ThingIndex < (2*ThingsPerSide);
 		++ThingIndex)
@@ -1395,31 +1501,63 @@ And then the game loads in the textures with mipmaps included.
 		Things[ThingIndex].RoadSide = -1.0f;
 		Things[ThingIndex].Distance = CurrentDistance;
 		
+		float DistanceSpacing;
+		
 		if(SideBandIndex == 0)
+		{
 			Things[ThingIndex].Billboard = &LanternSprite;
+			DistanceSpacing = 5.0f + 10.0f*RandomUnilateral(&RoadEntropy);
+		}
+		else if(SideBandIndex == 1)
+		{
+			float TreeRand = 2.0f*RandomUnilateral(&RoadEntropy);
+			
+			Things[ThingIndex].XOffset = -400.0f*fSideBand + RandomBilateral(&RoadEntropy)*50.0f;
+			
+			if(TreeRand > 1.0f)
+				Things[ThingIndex].Billboard = &RamenShopSprite;
+			else
+				Things[ThingIndex].Billboard = &TreeSprite;
+			
+			DistanceSpacing = 10.0f + 30.0f*RandomUnilateral(&RoadEntropy);
+		}
 		else
 		{
-			Things[ThingIndex].XOffset = -400.0f*fSideBand + RandomBilateral(&RoadEntropy)*50.0f;
-			Things[ThingIndex].Billboard = &RamenShopSprite;
+			Things[ThingIndex].XOffset = -800.0f*fSideBand + RandomBilateral(&RoadEntropy)*200.0f;
+			Things[ThingIndex].Billboard = &SkyscraperSprite;
+			
+			DistanceSpacing = 30.0f + 40.0f*RandomUnilateral(&RoadEntropy);
 		}
 		
-		float DistanceSpacing = 10.0f + 30.0f*RandomUnilateral(&RoadEntropy);
-		CurrentDistance -= DistanceSpacing;
+		CurrentDistance += DistanceSpacing;
+		
+		MaxPlaceDistance = Max(MaxPlaceDistance, CurrentDistance);
 		
 		//NOTE(moritz): Prep next band filling
 		if(((ThingIndex + 1 - ThingIndexOffset)/THINGS_PER_BAND) > SideBandIndex)
-			CurrentDistance = MaxDistance;
+			CurrentDistance = 0.0f;
 	}
 	
-	//NOTE(moritz): Civilian car
-	int CarIndex = 2*ThingsPerSide;
-	Things[CarIndex].Billboard = &CivilianSprite;
-	Things[CarIndex].Speed     = 10.0f;
-	Things[CarIndex].Distance  = 20.0f;
-	Things[CarIndex].XOffset   = 200.0f;
-	Things[CarIndex].Tint      = WHITE;
+	int NumberOfThings = 2*ThingsPerSide;
 	
-	int NumberOfThings = CarIndex + 1;
+	//NOTE(moritz): Civilian car
+	Things[NumberOfThings].Billboard = &CivilianSprite;
+	Things[NumberOfThings].Speed     = 10.0f;
+	Things[NumberOfThings].Distance  = 20.0f;
+	Things[NumberOfThings].XOffset   = 200.0f;
+	Things[NumberOfThings].Tint      = WHITE;
+	
+	++NumberOfThings;
+	
+	//NOTE(moritz): Alien :O
+	Things[NumberOfThings].Billboard = &AlienSprite;
+	Things[NumberOfThings].Speed     = 10.0f;
+	Things[NumberOfThings].Distance  = 10.0f;
+	Things[NumberOfThings].XOffset   = 0.0f;
+	Things[NumberOfThings].Tint      = WHITE;
+	Things[NumberOfThings].IsAlien   = true;
+	
+	++NumberOfThings;
 	
 	//---------------------------------------------------------
 	
@@ -1465,6 +1603,10 @@ And then the game loads in the textures with mipmaps included.
 	
 	RenderTexture2D TargetTexture = LoadRenderTexture(ScreenWidth, ScreenHeight);
 	
+	//---------------------------------------------------------
+	Music Music = {};
+	
+	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
 	while(!WindowShouldClose())
@@ -1482,15 +1624,19 @@ And then the game loads in the textures with mipmaps included.
 				AudioIsInitialised = true;
 				InitAudioDevice();
 				
-				//TODO(moritz): Load music and sfx here
+				//NOTE(moritz): Load music and sfx here
+				Music = LoadMusicStream("music.mp3");
+				
+				SetMusicVolume(Music, 1.0f);
+				PlayMusicStream(Music);
 			}
 		}
 		
 #if 0
 		//NOTE(moritz): Sprite tweaking station
 		{
-			CivilianSprite.SpriteScale = TWEAK(1.2f);
-			CivilianSprite.SpriteVerticalTweak = TWEAK(0.1f);
+			TreeSprite.SpriteScale = TWEAK(6.0f);
+			TreeSprite.SpriteVerticalTweak = TWEAK(0.06f);
 		}
 #endif
 		
@@ -1638,7 +1784,7 @@ And then the game loads in the textures with mipmaps included.
 			Things[ThingIndex].Distance += -dPlayerP + Things[ThingIndex].Speed*dtForFrame;
 			
 			if(Things[ThingIndex].Distance < 0.0f)
-				Things[ThingIndex].Distance = MaxDistance;
+				Things[ThingIndex].Distance = MaxPlaceDistance;
 		}
 		
 		//NOTE(moritz): Sort thing positions back to front
@@ -1682,10 +1828,40 @@ And then the game loads in the textures with mipmaps included.
 		
 		//NOTE(moritz): Parallax background
 		Vector2 SunsetP;
-		SunsetP.x = accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
+		SunsetP.x = TWEAK(0.125f)*accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
 		SunsetP.y = fScreenHeight - (float)SunsetTexture.height - TWEAK(200.0f);
 		DrawTextureEx(SunsetTexture, SunsetP, 0.0f, 1.0f, WHITE);
 		
+		
+		float ParaDelta = 0.065f;
+		float BaseParaC = 0.75f;
+		float SkylineScale = TWEAK(0.35f); //TWEAK(0.4f);
+		float SkylinePieceWidth = (float)SkylineTextures[0].width*SkylineScale;
+		for(int HRepIndex = 0;
+			HRepIndex < 5;
+			++HRepIndex)
+		{
+			float XRepPos = (float)HRepIndex*(float)SkylineTextures[0].width*SkylineScale; //SkylineX[HRepIndex];
+			for(int SkylineIndex = 0;
+				SkylineIndex < ArrayCount(SkylineTextures);
+				++SkylineIndex)
+			{
+				Vector2 SkylineP;
+				
+				SkylineP.x = accumulatedVelocity + XRepPos;/*0.5f*fScreenWidth - 0.5f*(float)SkylineTextures[SkylineIndex].width*SkylineScale;*/
+				
+				if(SkylineP.x <= -SkylinePieceWidth)
+					SkylineP.x += fScreenWidth + SkylinePieceWidth;
+				if(SkylineP.x >= (fScreenWidth + SkylinePieceWidth) )
+					SkylineP.x -= fScreenWidth + SkylinePieceWidth;
+				
+				SkylineP.y = fScreenHeight - (float)SkylineTextures[SkylineIndex].height*SkylineScale - TWEAK(200.0f);
+				DrawTextureEx(SkylineTextures[SkylineIndex], SkylineP, 0.0f, SkylineScale, LIGHTGRAY);
+				
+			}
+		}
+		
+		//NOTE(moritz): Ground gradient
 		DrawRectangleGradientV(0, ScreenHeight/2, ScreenWidth, ScreenHeight/2,
 							   GrassGradientCol0, GrassGradientCol1);
 		
@@ -1699,14 +1875,22 @@ And then the game loads in the textures with mipmaps included.
 						  CameraHeight,  &ActiveRoadList, PlayerBaseXOffset);
 #endif
 		//NOTE(moritz): Draw things/billboards
+		int FrameAlienIndex = -1;
 		for(int ThingIndex = 0;
 			ThingIndex < NumberOfThings;
 			++ThingIndex)
 		{
-			if(Things[ThingIndex].Distance > 0.0f)
-				DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex,
-							  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-							  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
+			if((Things[ThingIndex].Distance <= MaxDistance) &&
+			   (Things[ThingIndex].Distance > 0.1f))
+			{
+				DetermineThingFrameProperties(Things[ThingIndex].Billboard, Things + ThingIndex,
+											  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
+											  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
+				DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex);
+			}
+			
+			if(Things[ThingIndex].IsAlien)
+				FrameAlienIndex = ThingIndex;
 		}
 		
 		//NOTE(moritz): Draw player car
@@ -1721,7 +1905,10 @@ And then the game loads in the textures with mipmaps included.
 		crosshair.draw(dtForFrame);
 		bool isLeftPressed = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
 		
-		bool inImage = isImageClicked(SunsetP, SunImage);
+		//bool inImage = isImageClicked(SunsetP, SunImage);
+		bool inImage = false;
+		if(FrameAlienIndex)
+			inImage = isImageClicked(Things[FrameAlienIndex].FramePosition, Things[FrameAlienIndex].FrameScale, AlienImage);
 		crosshair.state = inImage ? 1 : 0;
 		
 		if(isLeftPressed && inImage) {
@@ -1732,7 +1919,7 @@ And then the game loads in the textures with mipmaps included.
 				lazer_r.start(&car.right_lazer_pos, GetMousePosition());
 			}
 		}
-
+		
 		lazer_l.draw(dtForFrame);
 		lazer_r.draw(dtForFrame);
 		
@@ -1787,6 +1974,8 @@ And then the game loads in the textures with mipmaps included.
 		EndShaderMode();
 		
 		EndDrawing();
+		
+		UpdateMusicStream(Music);
 		
 		//---------------------------------------------------------
 #ifndef WEB_BUILD
