@@ -652,7 +652,7 @@ DrawRoad(float PlayerP, float MaxDistance, float fScreenWidth, float fScreenHeig
 		 int DepthLineCount, road_list *ActiveRoadList, float PlayerBaseXOffset)
 {
 	float fDepthLineCount = (float)DepthLineCount;
-	float BaseRoadHalfWidth = fScreenWidth*0.6f;
+	float BaseRoadHalfWidth = fScreenWidth*0.8f;
 	float BaseStripeHalfWidth = 20.0f;
 	
 	float AngleOfRoad = PlayerBaseXOffset/fDepthLineCount;
@@ -788,14 +788,13 @@ struct thing
 };
 
 
-
 void
 DetermineThingFrameProperties(billboard *Billboard, thing *Thing, float MaxDistance,
 							  float fScreenWidth, float fScreenHeight, depth_line *DepthLines, int DepthLineCount, 
 							  float CameraHeight, road_list *ActiveRoadList, float PlayerBaseXOffset, bool DebugText = false)
 {
 	float fDepthLineCount = (float)DepthLineCount;
-	float BaseRoadHalfWidth   = fScreenWidth*0.6f;
+	float BaseRoadHalfWidth   = fScreenWidth*0.8f;
 	float AngleOfRoad = PlayerBaseXOffset/fDepthLineCount;
 	
 	Thing->DrawMe = true;
@@ -976,7 +975,7 @@ DrawBillboard(billboard *Billboard, thing *Thing)
 	DrawRectangleV(Thing->FramePosition, TestSize, BLACK);
 #endif
 	
-#if 1
+#if 0
 	//NOTE(moritz): Collision line vis
 	float ColHalfLength = 0.5f*(float)CurrentTexture.width*Thing->FrameScale;
 	Vector2 ColLineStart;
@@ -1036,25 +1035,25 @@ struct _Skyline {
 		SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
 		return texture;
 	}
-
+	
 	const float panning[5] = {1.f/10, 1.f/8, 1.f/6, 1.f/4, 1.f/2};
 	const float pan_min = 1;
 	const float pan_max = 100;
-
+	
 	Texture2D SkylineTextures[5] = {
 		loadAndSetWrap("city0.png"),
 		loadAndSetWrap("city1.png"),
 		loadAndSetWrap("city2.png"),
 		loadAndSetWrap("city3.png"),
 		loadAndSetWrap("city4.png") };
-
+	
 	const float screenW, screenH;
 	_Skyline(const float screenW, const float screenH) : screenW(screenW), screenH(screenH) { };
-
+	
 	float getPanFactor(float z_min, float z_max, float t) {
 		return 1.f / LerpM(1.f/z_min, t, 1.f/z_max);
 	}
-
+	
 	void draw(float delta_time, float accumulated_velocity) {
 		for(int i = 0; i < 5; ++i) {
 			const Texture2D& cur_text = SkylineTextures[i];
@@ -1062,14 +1061,38 @@ struct _Skyline {
 			// const float pan_factor = 20.f / LerpM(pan_min, 1-(float)i/5., pan_max);
 			// const float pan_factor = panning[i] * 10;
 			float cur_panning = fmod(pan_factor *-accumulated_velocity, cur_text.width);
-
+			
 			const Rectangle source = {fmod(cur_panning,(float) screenW), 0, (float) cur_text.width*2, (float)cur_text.height*2};
 			const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
-
+			
 			DrawTexturePro(cur_text, source, dest, {0,0}, 0, WHITE);
 		}
 	}
 };
+
+bool
+LineLineIntersect(Vector2 P1, Vector2 P2,
+				  Vector2 P3, Vector2 P4)
+{
+	float Denom = (P4.y - P3.y)*(P2.x - P1.x) - (P4.x - P3.x)*(P2.y - P1.y);
+	
+	if(Denom == 0.0f)
+		return false;
+	
+	float OneOverDenom = 1.0f/Denom;
+	
+	float tA = ((P4.x - P3.x)*(P1.y - P3.y) - (P4.y - P3.y)*(P1.x - P3.x))*OneOverDenom;
+	
+	float tB = ( (P2.x - P1.x)*(P1.y - P3.y) - (P2.y - P1.y)*(P1.x - P3.x) )*OneOverDenom;
+	
+	bool Result = 
+	(tA >= 0.0f) && 
+	(tA <= 1.0f) &&
+	(tB >= 0.0f) &&
+	(tB <= 1.0f);
+	
+	return(Result);
+}
 
 int
 main()
@@ -1668,9 +1691,9 @@ And then the game loads in the textures with mipmaps included.
 	
 	//---------------------------------------------------------
 	Music Music = {};
-
+	
 	Sound lazer_shot;
-
+	
 	_Skyline skyline(ScreenWidth, ScreenHeight);
 	
 	//NOTE(moritz): Main loop
@@ -1695,7 +1718,7 @@ And then the game loads in the textures with mipmaps included.
 				
 				SetMusicVolume(Music, 1.0f);
 				PlayMusicStream(Music);
-
+				
 				// Load audio
 				lazer_shot = LoadSound("lazer.wav");         // Load WAV audio file
 			}
@@ -1719,7 +1742,7 @@ And then the game loads in the textures with mipmaps included.
 		
 		float dtForFrame = GetFrameTime();
 		
-		dtForFrame *= TWEAK(1.0f);
+		//dtForFrame *= TWEAK(0.8f);
 		
 		//Max speed ~28.0f
 		// PlayerSpeed = TWEAK(10.0f);
@@ -1915,36 +1938,8 @@ And then the game loads in the textures with mipmaps included.
 		SunsetP.x = TWEAK(0.125f)*accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
 		SunsetP.y = fScreenHeight - (float)SunsetTexture.height - TWEAK(200.0f);
 		DrawTextureEx(SunsetTexture, SunsetP, 0.0f, 1.0f, WHITE);
-
-		skyline.draw(dtForFrame, accumulatedVelocity);
 		
-		// float ParaDelta = 0.065f;
-		// float BaseParaC = 0.75f;
-		// float SkylineScale = TWEAK(0.35f); //TWEAK(0.4f);
-		// float SkylinePieceWidth = (float)SkylineTextures[0].width*SkylineScale;
-		// for(int HRepIndex = 0;
-		// 	HRepIndex < 5;
-		// 	++HRepIndex)
-		// {
-		// 	float XRepPos = (float)HRepIndex*(float)SkylineTextures[0].width*SkylineScale; //SkylineX[HRepIndex];
-		// 	for(int SkylineIndex = 0;
-		// 		SkylineIndex < ArrayCount(SkylineTextures);
-		// 		++SkylineIndex)
-		// 	{
-		// 		Vector2 SkylineP;
-				
-		// 		SkylineP.x = accumulatedVelocity + XRepPos;/*0.5f*fScreenWidth - 0.5f*(float)SkylineTextures[SkylineIndex].width*SkylineScale;*/
-				
-		// 		if(SkylineP.x <= -SkylinePieceWidth)
-		// 			SkylineP.x += fScreenWidth + SkylinePieceWidth;
-		// 		if(SkylineP.x >= (fScreenWidth + SkylinePieceWidth) )
-		// 			SkylineP.x -= fScreenWidth + SkylinePieceWidth;
-				
-		// 		SkylineP.y = fScreenHeight - (float)SkylineTextures[SkylineIndex].height*SkylineScale - TWEAK(200.0f);
-		// 		DrawTextureEx(SkylineTextures[SkylineIndex], SkylineP, 0.0f, SkylineScale, LIGHTGRAY);
-				
-		// 	}
-		// }
+		skyline.draw(dtForFrame, accumulatedVelocity);
 		
 		//NOTE(moritz): Ground gradient
 		DrawRectangleGradientV(0, ScreenHeight/2, ScreenWidth, ScreenHeight/2,
@@ -1978,6 +1973,37 @@ And then the game loads in the textures with mipmaps included.
 				FrameAlienIndex = ThingIndex;
 		}
 		
+		//NOTE(moritz): Collision test against the 10? closest things
+		for(int ThingIndex = (NumberOfThings - 1);
+			ThingIndex > (NumberOfThings - 10 - 1);
+			--ThingIndex)
+		{
+			thing *Thing = Things + ThingIndex;
+			
+			Vector2 ThingColP = Thing->FrameBaseP;
+			float ThingColRadius = 0.5f*(float)Thing->Billboard->TextureRight.width*Thing->FrameScale + PlayerColHalfLength;
+			
+			Vector2 PlayerColStart = PlayerColP;
+			Vector2 PlayerColEnd   = PlayerColP;// + dPlayerP;
+			PlayerColEnd.y += TWEAK(-10.0f) - PlayerSpeed;//-PlayerSpeed;//dPlayerP/**200.0f*/;
+			
+			Vector2 ThingColStart = ThingColP;
+			ThingColStart.x -= ThingColRadius;
+			Vector2 ThingColEnd = ThingColP;
+			ThingColEnd.x += ThingColRadius;;
+			if(LineLineIntersect(PlayerColStart, PlayerColEnd,
+								 ThingColStart, ThingColEnd))
+			{
+				PlayerSpeed *= 0.5f;
+				float NewLenkSign = -Sign(PlayerBaseXOffset);//-Sign(ThingColP.x - PlayerColP.x);
+				lenkVelocity = fabs(lenkVelocity)*NewLenkSign;
+				lenkVelocity *=  TWEAK(5.0f)*PlayerSpeed;
+			}
+			
+			DrawLineEx(PlayerColStart, PlayerColEnd, 2.0f, WHITE);
+			DrawLineEx(ThingColStart, ThingColEnd, 2.0f, RED);
+		}
+		
 		//NOTE(moritz): Draw player car
 		Vector2 PlayerCarP = 
 		{
@@ -2003,7 +2029,7 @@ And then the game loads in the textures with mipmaps included.
 			if(!lazer_r.isRunning) {
 				lazer_r.start(&car.right_lazer_pos, GetMousePosition());
 			}
-
+			
 			PlaySound(lazer_shot);
 		}
 		
@@ -2011,8 +2037,9 @@ And then the game loads in the textures with mipmaps included.
 		lazer_r.draw(dtForFrame);
 		
 		car.position = PlayerCarP;
-		car.draw(dtForFrame);
+		//car.draw(dtForFrame);
 		
+#if 0
 		//NOTE(moritz): vis for palyer collision line
 		{
 			Vector2 ColLineStart = PlayerCarP;
@@ -2021,6 +2048,7 @@ And then the game loads in the textures with mipmaps included.
 			ColLineEnd.x   += PlayerColHalfLength;
 			DrawLineEx(ColLineStart, ColLineEnd, 2.0f, WHITE);
 		}
+#endif
 		
 #if 0
 		//NOTE(moritz): Visualise where the segments are at...
