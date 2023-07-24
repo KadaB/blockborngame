@@ -1037,7 +1037,7 @@ struct _Skyline {
 		return texture;
 	}
 
-	float panning[5] = {1, 2, 3, 4, 1.4};
+	float panning[5] = {1, 2, 3, 4, 5};
 
 	Texture2D SkylineTextures[5] = {
 		loadAndSetWrap("city0.png"),
@@ -1052,7 +1052,7 @@ struct _Skyline {
 	void draw(float delta_time, float accumulated_velocity) {
 		for(int i = 0; i < 5; ++i) {
 			const Texture2D& cur_text = SkylineTextures[i];
-			float cur_panning = panning[i] * accumulated_velocity;
+			float cur_panning = panning[i] *-accumulated_velocity;
 
 			const Rectangle source = {fmod(cur_panning,(float) screenW), 0, (float) cur_text.width*2, (float)cur_text.height*2};
 			const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
