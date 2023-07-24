@@ -1052,7 +1052,7 @@ struct _Skyline {
 	void draw(float delta_time, float accumulated_velocity) {
 		for(int i = 0; i < 5; ++i) {
 			const Texture2D& cur_text = SkylineTextures[i];
-			float cur_panning = panning[i] *-accumulated_velocity*10;
+			float cur_panning = fmod(panning[i] *-accumulated_velocity*10, cur_text.width);
 
 			const Rectangle source = {fmod(cur_panning,(float) screenW), 0, (float) cur_text.width*2, (float)cur_text.height*2};
 			const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
