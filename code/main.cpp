@@ -1728,16 +1728,47 @@ And then the game loads in the textures with mipmaps included.
 		bool isStarted = false;
 		Sound engine_go;
 
+		const int num_engines = 6;
+		Sound engines[7];
+
 		float last_velocity = 0.f;
 
 		void load() {
-				engine_go = LoadSound("engine_go.wav"); 
+				engine_go = LoadSound("engine1.wav"); 
+
+				engines[0] = LoadSound("engine0.wav");
+				engines[1] = LoadSound("engine1.wav");
+				engines[2] = LoadSound("engine2.wav");
+				engines[3] = LoadSound("engine3.wav");
+				engines[4] = LoadSound("engine4.wav");
+				engines[5] = LoadSound("engine5.wav");
+				engines[6] = LoadSound("engine6.wav");
+
+				for(int i = 0; i < num_engines; i++) {
+					SetSoundVolume(engines[i], .5);
+				}
+		}
+
+		void playInLoop(int i) {
+			if(!IsSoundPlaying(engines[i])) {
+				PlaySound(engines[i]);
+			}
+		}
+
+		void stopOthers(int i) {
+			for(int k = 0; k < num_engines; ++k) {
+				if(k != i) StopSound(engines[k]);
+			}
 		}
 
 		void update(float velocity) {
-			if(velocity > 0 && last_velocity - velocity > 5 && !IsSoundPlaying(engine_go)) {
-				PlaySound(engine_go);
-			}
+			// if(!IsSoundPlaying(engine_go)) PlaySound(engine_go);
+			float max_speed = 20;
+			//float cur_speed = ClampM(0, velocity, max_speed);
+			int index = ClampM(0.f, velocity / max_speed,1.f) * (num_engines - 1);
+
+			stopOthers(index);
+			playInLoop(index);
 
 			last_velocity = velocity;
 		}
@@ -1805,8 +1836,6 @@ And then the game loads in the textures with mipmaps included.
 			PlayerSpeed += PlayerAcceleration;
 			car.fire_animation1.scale = 1.1;
 			car.fire_animation2.scale = 1.1;
-
-			engine_sound_state.update(PlayerSpeed);
 		}
 		else {
 			car.fire_animation1.scale = .7;
@@ -1818,6 +1847,7 @@ And then the game loads in the textures with mipmaps included.
 			car.fire_animation1.scale = .2;
 			car.fire_animation2.scale = .2;
 		}
+		engine_sound_state.update(PlayerSpeed);
 		
 		if(PlayerSpeed <= 0.0f)
 			PlayerSpeed = 0.0f;
