@@ -1032,7 +1032,7 @@ bool isImageClicked(const Vector2 & image_position, const float & image_scale, c
 struct _Skyline {
 	Texture2D loadAndSetWrap(const char *fileName) {
 		Texture2D texture = LoadTexture(fileName);
-		SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
+		// SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
 		return texture;
 	}
 	
@@ -1058,14 +1058,16 @@ struct _Skyline {
 		for(int i = 0; i < 5; ++i) {
 			const Texture2D& cur_text = SkylineTextures[i];
 			const float pan_factor = getPanFactor(pan_min, pan_max , (float)i/5.);
-			// const float pan_factor = 20.f / LerpM(pan_min, 1-(float)i/5., pan_max);
-			// const float pan_factor = panning[i] * 10;
 			float cur_panning = fmod(pan_factor *-accumulated_velocity, cur_text.width);
 			
-			const Rectangle source = {fmod(cur_panning,(float) screenW), 0, (float) cur_text.width*2, (float)cur_text.height*2};
-			const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
 			
-			DrawTexturePro(cur_text, source, dest, {0,0}, 0, WHITE);
+			// repeat until multiples of screen
+			for(int pan_multipe = -1; pan_multipe*cur_text.width < screenW*2; ++pan_multipe) {
+				// const Rectangle source = {, 0, (float) cur_text.width*2, (float)cur_text.height*2};
+				// const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
+				// DrawTexturePro(cur_text, source, dest, {0,0}, 0, WHITE);
+				DrawTexture(cur_text, fmod(cur_panning,(float) screenW) + pan_multipe*cur_text.width, -50, WHITE);
+			}
 		}
 	}
 };
