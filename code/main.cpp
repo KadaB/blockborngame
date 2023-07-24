@@ -1693,7 +1693,8 @@ And then the game loads in the textures with mipmaps included.
 	Music Music = {};
 	
 	Sound lazer_shot;
-	
+	Sound crosshair_blip;
+
 	_Skyline skyline(ScreenWidth, ScreenHeight);
 	
 	//NOTE(moritz): Main loop
@@ -1721,6 +1722,7 @@ And then the game loads in the textures with mipmaps included.
 				
 				// Load audio
 				lazer_shot = LoadSound("lazer.wav");         // Load WAV audio file
+				crosshair_blip = LoadSound("crosshair_blip.wav");         // Load WAV audio file
 			}
 		}
 		
@@ -2020,7 +2022,11 @@ And then the game loads in the textures with mipmaps included.
 		bool inImage = false;
 		if(FrameAlienIndex)
 			inImage = isImageClicked(Things[FrameAlienIndex].FramePosition, Things[FrameAlienIndex].FrameScale, AlienImage);
-		crosshair.state = inImage ? 1 : 0;
+		int new_crosshair_state = inImage ? 1 : 0;
+		if(crosshair.state == 0 && new_crosshair_state == 1) {
+			PlaySound(crosshair_blip);
+		}
+		crosshair.state = new_crosshair_state;
 		
 		if(isLeftPressed && inImage) {
 			if(!lazer_l.isRunning) {
