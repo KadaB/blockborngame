@@ -1037,7 +1037,9 @@ struct _Skyline {
 		return texture;
 	}
 
-	float panning[5] = {1.f/10, 1.f/8, 1.f/6, 1.f/4, 1.f/2};
+	const float panning[5] = {1.f/10, 1.f/8, 1.f/6, 1.f/4, 1.f/2};
+	const float pan_min = 2;
+	const float pan_max = 15;
 
 	Texture2D SkylineTextures[5] = {
 		loadAndSetWrap("city0.png"),
@@ -1049,10 +1051,17 @@ struct _Skyline {
 	const float screenW, screenH;
 	_Skyline(const float screenW, const float screenH) : screenW(screenW), screenH(screenH) { };
 
+	float getPanFactor(float z_min, float z_max, float t) {
+		return 1.f / LerpM(1.f/z_min, t, 1.f/z_max);
+	}
+
 	void draw(float delta_time, float accumulated_velocity) {
 		for(int i = 0; i < 5; ++i) {
 			const Texture2D& cur_text = SkylineTextures[i];
-			float cur_panning = fmod(panning[i] *-accumulated_velocity*10, cur_text.width);
+			const float pan_factor = getPanFactor(pan_min, pan_max , (float)i/5.);
+			// const float pan_factor = 20.f / LerpM(pan_min, 1-(float)i/5., pan_max);
+			// const float pan_factor = panning[i] * 10;
+			float cur_panning = fmod(pan_factor *-accumulated_velocity, cur_text.width);
 
 			const Rectangle source = {fmod(cur_panning,(float) screenW), 0, (float) cur_text.width*2, (float)cur_text.height*2};
 			const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
