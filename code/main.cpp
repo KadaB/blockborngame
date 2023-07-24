@@ -1015,6 +1015,38 @@ bool isImageClicked(const Vector2 & image_position, const float & image_scale, c
 	return false;
 }
 
+struct _Skyline {
+	Texture2D loadAndSetWrap(const char *fileName) {
+		Texture2D texture = LoadTexture(fileName);
+		SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
+		return texture;
+	}
+
+	float panning[5] = {1, 2, 3, 4, 1.4};
+
+	Texture2D SkylineTextures[5] = {
+		loadAndSetWrap("city0.png"),
+		loadAndSetWrap("city1.png"),
+		loadAndSetWrap("city2.png"),
+		loadAndSetWrap("city3.png"),
+		loadAndSetWrap("city4.png") };
+
+	const float screenW, screenH;
+	_Skyline(const float screenW, const float screenH) : screenW(screenW), screenH(screenH) { };
+
+	void draw(float delta_time, float accumulated_velocity) {
+		for(int i = 0; i < 5; ++i) {
+			const Texture2D& cur_text = SkylineTextures[i];
+			float cur_panning = panning[i] * accumulated_velocity;
+
+			const Rectangle source = {fmod(cur_panning,(float) screenW), 0, (float) cur_text.width*2, (float)cur_text.height*2};
+			const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
+
+			DrawTexturePro(cur_text, source, dest, {0,0}, 0, WHITE);
+		}
+	}
+};
+
 int
 main()
 {
@@ -1095,13 +1127,6 @@ main()
 	Image AlienImage = LoadImageFromTexture(AlienTexture);
 	//SetTextureFilter(AlienTexture, TEXTURE_FILTER_N);
 	
-	//NOTE(moritz): back to front
-	Texture2D SkylineTextures[5];
-	SkylineTextures[0] = LoadTexture("city0.png");
-	SkylineTextures[1] = LoadTexture("city1.png");
-	SkylineTextures[2] = LoadTexture("city2.png");
-	SkylineTextures[3] = LoadTexture("city3.png");
-	SkylineTextures[4] = LoadTexture("city4.png");
 	
 	struct _dithered_horizon {
 		Vector2 position = {0, 0};
@@ -1144,8 +1169,6 @@ main()
 			return state % 2;
 		}
 		
-		
-		// MARK1
 		void draw(float delta_time) {
 			runtime += delta_time;
 			_Frame current_frame = frames[calculate_current_frame()];
@@ -1606,6 +1629,7 @@ And then the game loads in the textures with mipmaps included.
 	//---------------------------------------------------------
 	Music Music = {};
 	
+	_Skyline skyline(ScreenWidth, ScreenHeight);
 	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
@@ -1831,35 +1855,36 @@ And then the game loads in the textures with mipmaps included.
 		SunsetP.x = TWEAK(0.125f)*accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
 		SunsetP.y = fScreenHeight - (float)SunsetTexture.height - TWEAK(200.0f);
 		DrawTextureEx(SunsetTexture, SunsetP, 0.0f, 1.0f, WHITE);
+
+		skyline.draw(dtForFrame, accumulatedVelocity);
 		
-		
-		float ParaDelta = 0.065f;
-		float BaseParaC = 0.75f;
-		float SkylineScale = TWEAK(0.35f); //TWEAK(0.4f);
-		float SkylinePieceWidth = (float)SkylineTextures[0].width*SkylineScale;
-		for(int HRepIndex = 0;
-			HRepIndex < 5;
-			++HRepIndex)
-		{
-			float XRepPos = (float)HRepIndex*(float)SkylineTextures[0].width*SkylineScale; //SkylineX[HRepIndex];
-			for(int SkylineIndex = 0;
-				SkylineIndex < ArrayCount(SkylineTextures);
-				++SkylineIndex)
-			{
-				Vector2 SkylineP;
+		// float ParaDelta = 0.065f;
+		// float BaseParaC = 0.75f;
+		// float SkylineScale = TWEAK(0.35f); //TWEAK(0.4f);
+		// float SkylinePieceWidth = (float)SkylineTextures[0].width*SkylineScale;
+		// for(int HRepIndex = 0;
+		// 	HRepIndex < 5;
+		// 	++HRepIndex)
+		// {
+		// 	float XRepPos = (float)HRepIndex*(float)SkylineTextures[0].width*SkylineScale; //SkylineX[HRepIndex];
+		// 	for(int SkylineIndex = 0;
+		// 		SkylineIndex < ArrayCount(SkylineTextures);
+		// 		++SkylineIndex)
+		// 	{
+		// 		Vector2 SkylineP;
 				
-				SkylineP.x = accumulatedVelocity + XRepPos;/*0.5f*fScreenWidth - 0.5f*(float)SkylineTextures[SkylineIndex].width*SkylineScale;*/
+		// 		SkylineP.x = accumulatedVelocity + XRepPos;/*0.5f*fScreenWidth - 0.5f*(float)SkylineTextures[SkylineIndex].width*SkylineScale;*/
 				
-				if(SkylineP.x <= -SkylinePieceWidth)
-					SkylineP.x += fScreenWidth + SkylinePieceWidth;
-				if(SkylineP.x >= (fScreenWidth + SkylinePieceWidth) )
-					SkylineP.x -= fScreenWidth + SkylinePieceWidth;
+		// 		if(SkylineP.x <= -SkylinePieceWidth)
+		// 			SkylineP.x += fScreenWidth + SkylinePieceWidth;
+		// 		if(SkylineP.x >= (fScreenWidth + SkylinePieceWidth) )
+		// 			SkylineP.x -= fScreenWidth + SkylinePieceWidth;
 				
-				SkylineP.y = fScreenHeight - (float)SkylineTextures[SkylineIndex].height*SkylineScale - TWEAK(200.0f);
-				DrawTextureEx(SkylineTextures[SkylineIndex], SkylineP, 0.0f, SkylineScale, LIGHTGRAY);
+		// 		SkylineP.y = fScreenHeight - (float)SkylineTextures[SkylineIndex].height*SkylineScale - TWEAK(200.0f);
+		// 		DrawTextureEx(SkylineTextures[SkylineIndex], SkylineP, 0.0f, SkylineScale, LIGHTGRAY);
 				
-			}
-		}
+		// 	}
+		// }
 		
 		//NOTE(moritz): Ground gradient
 		DrawRectangleGradientV(0, ScreenHeight/2, ScreenWidth, ScreenHeight/2,
