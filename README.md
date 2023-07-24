@@ -31,9 +31,10 @@ start server with
     python3 -m http.server
 
 # Credits/Assets
+Artist: Weena Lee (ig: @mer_weenana)
+Music: Enville https://soundcloud.com/enville_music​
 Programming: Moritz Falk (twitter: @falk_moritz, ig: @falk_dev)
 Programming: KadaB (https://github.com/KadaB)
-Artist: Weena Lee (ig: @mer_weenana)
 
 Framework: Raylib
 City Skyline: https://free-game-assets.itch.io/free-city-backgrounds-pixel-art
