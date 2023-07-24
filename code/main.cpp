@@ -1795,6 +1795,7 @@ And then the game loads in the textures with mipmaps included.
 		
 		void load() {
 			engine = LoadSound("engine.wav");
+			SetSoundVolume(engine, .5);
 		}
 		
 		void playInLoop(float pitch) {
