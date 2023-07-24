@@ -968,7 +968,7 @@ DrawBillboard(billboard *Billboard, thing *Thing)
 	
 	DrawTextureEx(CurrentTexture, Thing->FramePosition, 0.0f, Thing->FrameScale, Thing->Tint);
 	
-#if 1
+#if 0
 	//NOTE(moritz): Vis for sprite hot spots
 	Vector2 TestSize = {5.0f, 5.0f};
 	DrawRectangleV(Thing->FrameBaseP, TestSize, RED);
@@ -1033,6 +1033,7 @@ struct _Skyline {
 	Texture2D loadAndSetWrap(const char *fileName) {
 		Texture2D texture = LoadTexture(fileName);
 		// SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
+		
 		return texture;
 	}
 	
@@ -1060,6 +1061,8 @@ struct _Skyline {
 			const float pan_factor = getPanFactor(pan_min, pan_max , (float)i/5.);
 			float cur_panning = fmod(pan_factor *-accumulated_velocity, cur_text.width);
 			
+			const Rectangle source = {(float)fmod(cur_panning,(float) screenW), 0, (float) cur_text.width*2, (float)cur_text.height*2};
+			const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
 			
 			// repeat until multiples of screen
 			for(int pan_multipe = -1; pan_multipe*cur_text.width < screenW*2; ++pan_multipe) {
@@ -1696,7 +1699,7 @@ And then the game loads in the textures with mipmaps included.
 	
 	Sound lazer_shot;
 	Sound crosshair_blip;
-
+	
 	_Skyline skyline(ScreenWidth, ScreenHeight);
 	
 	//NOTE(moritz): Main loop
@@ -1928,6 +1931,66 @@ And then the game loads in the textures with mipmaps included.
 				break;
 		}
 		
+		//NOTE(moritz): Determine thing frame properties
+		int FrameAlienIndex = -1;
+		for(int ThingIndex = 0;
+			ThingIndex < NumberOfThings;
+			++ThingIndex)
+		{
+			if((Things[ThingIndex].Distance <= MaxDistance) &&
+			   (Things[ThingIndex].Distance > 0.1f))
+			{
+				DetermineThingFrameProperties(Things[ThingIndex].Billboard, Things + ThingIndex,
+											  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
+											  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
+			}
+			
+			if(Things[ThingIndex].IsAlien)
+				FrameAlienIndex = ThingIndex;
+		}
+		
+		//NOTE(moritz): Collision test against the 5? closest things
+		for(int ThingIndex = (NumberOfThings - 1);
+			ThingIndex > (NumberOfThings - 5 - 1);
+			--ThingIndex)
+		{
+			if(ThingIndex == FrameAlienIndex)
+				continue;
+			
+			thing *Thing = Things + ThingIndex;
+			
+			Vector2 ThingColP = Thing->FrameBaseP;
+			float ThingColRadius = 0.5f*(float)Thing->Billboard->TextureRight.width*Thing->FrameScale + PlayerColHalfLength;
+			
+			Vector2 PlayerColStart = PlayerColP;
+			Vector2 PlayerColEnd   = PlayerColP;// + dPlayerP;
+			PlayerColEnd.y += TWEAK(-10.0f) - PlayerSpeed;//-PlayerSpeed;//dPlayerP/**200.0f*/;
+			
+			Vector2 ThingColStart = ThingColP;
+			ThingColStart.x -= ThingColRadius;
+			Vector2 ThingColEnd = ThingColP;
+			ThingColEnd.x += ThingColRadius;;
+			if(LineLineIntersect(PlayerColStart, PlayerColEnd,
+								 ThingColStart, ThingColEnd))
+			{
+				PlayerSpeed *= 0.5f;
+				float NewLenkSign = -Sign(PlayerBaseXOffset);//-Sign(ThingColP.x - PlayerColP.x);
+				lenkVelocity = fabs(lenkVelocity)*NewLenkSign;
+				lenkVelocity *=  TWEAK(5.0f)*PlayerSpeed;
+			}
+			
+			//DrawLineEx(PlayerColStart, PlayerColEnd, 2.0f, WHITE);
+			//DrawLineEx(ThingColStart, ThingColEnd, 2.0f, RED);
+		}
+		
+		//NOTE(moritz): Basic-ass alien behaviour
+		if(Things[FrameAlienIndex].Distance < TWEAK(5.0f))
+			Things[FrameAlienIndex].Speed +=Max( (1.0f/Things[FrameAlienIndex].Distance)*TWEAK(1.0f), 28.0f);
+		
+		if(Things[FrameAlienIndex].Distance > TWEAK(20.0f))
+			Things[FrameAlienIndex].Speed -= Things[FrameAlienIndex].Distance*TWEAK(0.1f);
+		
+		
 		//BeginDrawing();
 		BeginTextureMode(TargetTexture);
 		
@@ -1953,60 +2016,12 @@ And then the game loads in the textures with mipmaps included.
 		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
 				 &ActiveRoadList, PlayerBaseXOffset);
 		
-#if 0
-		if(TreeDistance > 0.0f)
-			DrawBillboard(TreeTexture, TreeDistance, MaxDistance,
-						  fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-						  CameraHeight,  &ActiveRoadList, PlayerBaseXOffset);
-#endif
-		//NOTE(moritz): Draw things/billboards
-		int FrameAlienIndex = -1;
+		//NOTE(moritz): Draw things
 		for(int ThingIndex = 0;
 			ThingIndex < NumberOfThings;
 			++ThingIndex)
 		{
-			if((Things[ThingIndex].Distance <= MaxDistance) &&
-			   (Things[ThingIndex].Distance > 0.1f))
-			{
-				DetermineThingFrameProperties(Things[ThingIndex].Billboard, Things + ThingIndex,
-											  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-											  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
-				DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex);
-			}
-			
-			if(Things[ThingIndex].IsAlien)
-				FrameAlienIndex = ThingIndex;
-		}
-		
-		//NOTE(moritz): Collision test against the 10? closest things
-		for(int ThingIndex = (NumberOfThings - 1);
-			ThingIndex > (NumberOfThings - 10 - 1);
-			--ThingIndex)
-		{
-			thing *Thing = Things + ThingIndex;
-			
-			Vector2 ThingColP = Thing->FrameBaseP;
-			float ThingColRadius = 0.5f*(float)Thing->Billboard->TextureRight.width*Thing->FrameScale + PlayerColHalfLength;
-			
-			Vector2 PlayerColStart = PlayerColP;
-			Vector2 PlayerColEnd   = PlayerColP;// + dPlayerP;
-			PlayerColEnd.y += TWEAK(-10.0f) - PlayerSpeed;//-PlayerSpeed;//dPlayerP/**200.0f*/;
-			
-			Vector2 ThingColStart = ThingColP;
-			ThingColStart.x -= ThingColRadius;
-			Vector2 ThingColEnd = ThingColP;
-			ThingColEnd.x += ThingColRadius;;
-			if(LineLineIntersect(PlayerColStart, PlayerColEnd,
-								 ThingColStart, ThingColEnd))
-			{
-				PlayerSpeed *= 0.5f;
-				float NewLenkSign = -Sign(PlayerBaseXOffset);//-Sign(ThingColP.x - PlayerColP.x);
-				lenkVelocity = fabs(lenkVelocity)*NewLenkSign;
-				lenkVelocity *=  TWEAK(5.0f)*PlayerSpeed;
-			}
-			
-			DrawLineEx(PlayerColStart, PlayerColEnd, 2.0f, WHITE);
-			DrawLineEx(ThingColStart, ThingColEnd, 2.0f, RED);
+			DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex);
 		}
 		
 		//NOTE(moritz): Draw player car
