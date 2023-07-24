@@ -1723,6 +1723,7 @@ And then the game loads in the textures with mipmaps included.
 				// Load audio
 				lazer_shot = LoadSound("lazer.wav");         // Load WAV audio file
 				crosshair_blip = LoadSound("crosshair_blip.wav");         // Load WAV audio file
+				SetSoundVolume(crosshair_blip, .5);
 			}
 		}
 		
@@ -2043,7 +2044,7 @@ And then the game loads in the textures with mipmaps included.
 		lazer_r.draw(dtForFrame);
 		
 		car.position = PlayerCarP;
-		//car.draw(dtForFrame);
+		car.draw(dtForFrame);
 		
 #if 0
 		//NOTE(moritz): vis for palyer collision line
