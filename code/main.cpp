@@ -1791,53 +1791,25 @@ And then the game loads in the textures with mipmaps included.
 	Sound crosshair_blip;
 	
 	struct _EngineSoundState  {
-		bool isStarted = false;
-		Sound engine_go;
-		
-		const int num_engines = 6;
-		Sound engines[7];
-		
-		float last_velocity = 0.f;
+		Sound engine;
 		
 		void load() {
-			engine_go = LoadSound("engine1.wav"); 
-			
-			engines[0] = LoadSound("engine0.wav");
-			engines[1] = LoadSound("engine1.wav");
-			engines[2] = LoadSound("engine2.wav");
-			engines[3] = LoadSound("engine3.wav");
-			engines[4] = LoadSound("engine4.wav");
-			engines[5] = LoadSound("engine5.wav");
-			engines[6] = LoadSound("engine6.wav");
-			
-			for(int i = 0; i < num_engines; i++) {
-				SetSoundVolume(engines[i], .25f);
-				SetSoundPitch(engines[i], 0.75f);
-			}
+			engine = LoadSound("engine.wav");
 		}
 		
-		void playInLoop(int i) {
-			if(!IsSoundPlaying(engines[i])) {
-				PlaySound(engines[i]);
-			}
-		}
-		
-		void stopOthers(int i) {
-			for(int k = 0; k < num_engines; ++k) {
-				if(k != i) StopSound(engines[k]);
+		void playInLoop(float pitch) {
+			SetSoundPitch(engine, pitch);
+			if(!IsSoundPlaying(engine)) {
+				PlaySound(engine);
 			}
 		}
 		
 		void update(float velocity) {
-			// if(!IsSoundPlaying(engine_go)) PlaySound(engine_go);
 			float max_speed = 20;
-			//float cur_speed = ClampM(0, velocity, max_speed);
-			int index = ClampM(0.f, velocity / max_speed,1.f) * (num_engines - 1);
-			
-			stopOthers(index);
-			playInLoop(index);
-			
-			last_velocity = velocity;
+			float max_pitch = 2;
+			float cur_pitch = ClampM(0.f, velocity / max_speed,1.f) * 2.f;
+
+			playInLoop(cur_pitch);
 		}
 	} engine_sound_state;
 	
