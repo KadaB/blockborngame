@@ -823,8 +823,8 @@ DetermineThingFrameProperties(billboard *Billboard, thing *Thing, float MaxDista
 	float ScaleInT = (MaxDistance - Thing->Distance)*OneOverScaleInDistance;
 	ScaleInT = Clamp(0.0f, ScaleInT, 1.0f);
 	
-	if(DebugText)
-		DrawText(TextFormat("TreeScaleInT: %f", ScaleInT), 20, 20, 10, RED);
+	//if(DebugText)
+	//DrawText(TextFormat("TreeScaleInT: %f", ScaleInT), 20, 20, 10, RED);
 	
 	float OneOverMaxDistance = 1.0f/MaxDistance;
 	float BasePDepth = Thing->Distance*OneOverMaxDistance;
@@ -865,8 +865,8 @@ DetermineThingFrameProperties(billboard *Billboard, thing *Thing, float MaxDista
 	
 	float DepthScale = LerpM(Scale0, t, Scale1);
 	
-	if(DebugText)
-		DrawText(TextFormat("TreeDepthScale: %f", DepthScale), 20, 30, 10, RED);
+	//if(DebugText)
+	//DrawText(TextFormat("TreeDepthScale: %f", DepthScale), 20, 30, 10, RED);
 	
 	//NOTE(moritz): Determine screen position of BaseP
 	float BasePScreenY = fScreenHeight;
@@ -1190,6 +1190,7 @@ main()
 	link_pool LinkPool = {};
 	link_list LinkList = {};
 	
+	unsigned int AlienHitCount = 0;
 	
 	//---------------------------------------------------------
 	
@@ -1809,7 +1810,8 @@ And then the game loads in the textures with mipmaps included.
 			engines[6] = LoadSound("engine6.wav");
 			
 			for(int i = 0; i < num_engines; i++) {
-				SetSoundVolume(engines[i], .5);
+				SetSoundVolume(engines[i], .25f);
+				SetSoundPitch(engines[i], 0.75f);
 			}
 		}
 		
@@ -2164,7 +2166,7 @@ And then the game loads in the textures with mipmaps included.
 		
 		ClearBackground(PINK);
 		DrawRectangleGradientV(0, 0, ScreenWidth, ScreenHeight/2, SkyGradientCol0, SkyGradientCol1);
-		DrawFPS(30, 10);
+		//DrawFPS(30, 10);
 		
 		// horizon
 		dithered_horizon.draw(dtForFrame);
@@ -2223,6 +2225,8 @@ And then the game loads in the textures with mipmaps included.
 			}
 			
 			PlaySound(lazer_shot);
+			
+			AlienHitCount += 10;
 		}
 		
 		lazer_l.draw(dtForFrame);
@@ -2270,8 +2274,8 @@ And then the game loads in the textures with mipmaps included.
 		
 		//---------------------------------------------------------
 		
-		DrawText(TextFormat("PlayerSpeed: %f", PlayerSpeed), 20, 20, 10, RED);
-		DrawText(TextFormat("SteerFactor: %f", SteerFactor), 20, 30, 10, RED);
+		//DrawText(TextFormat("PlayerSpeed: %f", PlayerSpeed), 20, 20, 10, RED);
+		//DrawText(TextFormat("SteerFactor: %f", SteerFactor), 20, 30, 10, RED);
 		
 		//---------------------------------------------------------
 		
@@ -2287,6 +2291,8 @@ And then the game loads in the textures with mipmaps included.
 		DrawTextureRec(TargetTexture.texture, /*(Rectangle)*/{ 0, 0, (float)TargetTexture.texture.width, (float)-TargetTexture.texture.height }, /*(Vector2)*/{ 0, 0 }, WHITE);
 		
 		EndShaderMode();
+		
+		DrawText(TextFormat("SCORE %u", AlienHitCount), 300, 10, 40, WHITE);
 		
 		EndDrawing();
 		
