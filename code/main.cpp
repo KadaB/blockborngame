@@ -759,7 +759,11 @@ struct billboard
 
 struct thing
 {
+	int ID;
+	
+	bool IsDeleted;
 	bool IsAlien;
+	bool IsBullet;
 	
 	float Distance;
 	float XOffset;
@@ -788,6 +792,8 @@ struct thing
 	Vector2 FrameBaseP;
 	
 	billboard *Billboard;
+	
+	int NextIDInFreeList;
 };
 
 
@@ -799,6 +805,9 @@ DetermineThingFrameProperties(billboard *Billboard, thing *Thing, float MaxDista
 	float fDepthLineCount = (float)DepthLineCount;
 	float BaseRoadHalfWidth   = fScreenWidth*0.8f;
 	float AngleOfRoad = PlayerBaseXOffset/fDepthLineCount;
+	
+	if(Thing->IsDeleted)
+		return;
 	
 	Thing->DrawMe = true;
 	
@@ -933,8 +942,6 @@ DetermineThingFrameProperties(billboard *Billboard, thing *Thing, float MaxDista
 	}
 	
 	
-	
-	
 	Vector2 BaseP = {};
 	BaseP.x = LerpM(X0, t, X1);
 	BaseP.y = BasePScreenY;
@@ -959,6 +966,9 @@ void
 DrawBillboard(billboard *Billboard, thing *Thing)
 {
 	if(!Thing->DrawMe)
+		return;
+	
+	if(Thing->IsDeleted)
 		return;
 	
 	//NOTE(moritz): In case of vehicle either left or right is fine
@@ -1104,11 +1114,47 @@ LineLineIntersect(Vector2 P1, Vector2 P2,
 }
 
 void
-AddAlienBullet(thing *Things, int NumberOfThings, thing **FirstFreeThing)
+AddAlienBullet(thing *Things, int *NumberOfThings, int *FirstFreeThing, int FrameAlienIndex, billboard *BulletBillboard)
 {
-	if(FirstFreeThing)
+	thing *NewBullet = 0;
+	if((*FirstFreeThing) >= 0)
 	{
+		thing *FreeThing = 0;
+		for(int ThingIndex = 0;
+			ThingIndex < (*NumberOfThings);
+			++ThingIndex)
+		{
+			if(Things[ThingIndex].ID == (*FirstFreeThing))
+			{
+				FreeThing = Things + ThingIndex;
+			}
+		}
+		
+		NewBullet = FreeThing;
+		*FirstFreeThing = FreeThing->NextIDInFreeList;
+		
+		*NewBullet = {};
 	}
+	else
+	{
+		NewBullet = Things + *NumberOfThings;
+		*NumberOfThings += 1;
+	}
+	
+	NewBullet->IsBullet = true;
+	NewBullet->Distance = Things[FrameAlienIndex].Distance;
+	NewBullet->Speed    = -5.0f;
+	NewBullet->Billboard = BulletBillboard;
+	NewBullet->Tint      = WHITE;
+}
+
+void
+DeleteBullet(thing *Bullet, int *FirstFreeThing)
+{
+	Bullet->IsDeleted = true;
+	
+	Bullet->NextIDInFreeList = *FirstFreeThing;
+	*FirstFreeThing = Bullet->ID;
 }
 
 int
@@ -1190,6 +1236,9 @@ main()
 	Texture2D AlienTexture = LoadTexture("alien.png");
 	Image AlienImage = LoadImageFromTexture(AlienTexture);
 	//SetTextureFilter(AlienTexture, TEXTURE_FILTER_N);
+	
+	Texture2D BulletTexture = LoadTexture("emp.png");
+	
 	
 	struct _dithered_horizon {
 		Vector2 position = {0, 0};
@@ -1506,8 +1555,23 @@ And then the game loads in the textures with mipmaps included.
 	AlienSprite.TextureRight = AlienTexture;
 	AlienSprite.TextureLeft  = AlienTexture;
 	
+	billboard BulletSprite;
+	BulletSprite.SpriteScale = 1.0f;
+	BulletSprite.SpriteVerticalTweak = 0.0f;
+	BulletSprite.TextureRight = BulletTexture;
+	BulletSprite.TextureLeft  = BulletTexture;
+	
 	//NOTE(moritz): Side bands.. 4?  32 per side band? times two for left/ right side
 	thing Things[256] = {};
+	//thing *FirstFreeThing = FreeThings;
+	int FirstFreeThing = -1;
+	
+	for(int ThingIndex = 0;
+		ThingIndex < ArrayCount(Things);
+		++ThingIndex)
+	{
+		Things[ThingIndex].ID = ThingIndex;
+	}
 	
 	int SideBandIndex = 0;
 	
@@ -1637,7 +1701,7 @@ And then the game loads in the textures with mipmaps included.
 	int NumberOfThings = 2*ThingsPerSide;
 	
 	//NOTE(moritz): Civilian cars
-	float CivCarSpacing = 5.0f;
+	float CivCarSpacing = 20.0f;
 	float CivCarDist = 5.0f;
 	for(int CivCarIndex = 0;
 		CivCarIndex < 12;
@@ -1723,57 +1787,57 @@ And then the game loads in the textures with mipmaps included.
 	
 	Sound lazer_shot;
 	Sound crosshair_blip;
-
+	
 	struct _EngineSoundState  {
 		bool isStarted = false;
 		Sound engine_go;
-
+		
 		const int num_engines = 6;
 		Sound engines[7];
-
+		
 		float last_velocity = 0.f;
-
+		
 		void load() {
-				engine_go = LoadSound("engine1.wav"); 
-
-				engines[0] = LoadSound("engine0.wav");
-				engines[1] = LoadSound("engine1.wav");
-				engines[2] = LoadSound("engine2.wav");
-				engines[3] = LoadSound("engine3.wav");
-				engines[4] = LoadSound("engine4.wav");
-				engines[5] = LoadSound("engine5.wav");
-				engines[6] = LoadSound("engine6.wav");
-
-				for(int i = 0; i < num_engines; i++) {
-					SetSoundVolume(engines[i], .5);
-				}
+			engine_go = LoadSound("engine1.wav"); 
+			
+			engines[0] = LoadSound("engine0.wav");
+			engines[1] = LoadSound("engine1.wav");
+			engines[2] = LoadSound("engine2.wav");
+			engines[3] = LoadSound("engine3.wav");
+			engines[4] = LoadSound("engine4.wav");
+			engines[5] = LoadSound("engine5.wav");
+			engines[6] = LoadSound("engine6.wav");
+			
+			for(int i = 0; i < num_engines; i++) {
+				SetSoundVolume(engines[i], .5);
+			}
 		}
-
+		
 		void playInLoop(int i) {
 			if(!IsSoundPlaying(engines[i])) {
 				PlaySound(engines[i]);
 			}
 		}
-
+		
 		void stopOthers(int i) {
 			for(int k = 0; k < num_engines; ++k) {
 				if(k != i) StopSound(engines[k]);
 			}
 		}
-
+		
 		void update(float velocity) {
 			// if(!IsSoundPlaying(engine_go)) PlaySound(engine_go);
 			float max_speed = 20;
 			//float cur_speed = ClampM(0, velocity, max_speed);
 			int index = ClampM(0.f, velocity / max_speed,1.f) * (num_engines - 1);
-
+			
 			stopOthers(index);
 			playInLoop(index);
-
+			
 			last_velocity = velocity;
 		}
 	} engine_sound_state;
-
+	
 	_Skyline skyline(ScreenWidth, ScreenHeight);
 	
 	//NOTE(moritz): Main loop
@@ -1965,15 +2029,21 @@ And then the game loads in the textures with mipmaps included.
 			ThingIndex < NumberOfThings;
 			++ThingIndex)
 		{
+			if(Things[ThingIndex].IsDeleted)
+				continue;
+			
 			Things[ThingIndex].Distance += -dPlayerP + Things[ThingIndex].Speed*dtForFrame;
 			
 			if(Things[ThingIndex].Distance < 0.0f)
 			{
 				int BandIndex = Things[ThingIndex].BandIndex - 1;
 				if(BandIndex < 0)
-					BandIndex = 0;
+					BandIndex = 1;
 				
 				Things[ThingIndex].Distance = BandMaxPlaceDistances[BandIndex];
+				
+				if(Things[ThingIndex].IsBullet)
+					DeleteBullet(Things + ThingIndex, &FirstFreeThing);
 			}
 			//Things[ThingIndex].Distance = MaxPlaceDistance;
 		}
@@ -2027,8 +2097,11 @@ And then the game loads in the textures with mipmaps included.
 				
 				Things[ThingIndex].ShootTimer -= dtForFrame;
 				
-				if(dtForFrame < 0.0f)
+				if(Things[ThingIndex].ShootTimer < 0.0f)
+				{
 					Things[ThingIndex].ShootTimer = 1.0f;
+					AddAlienBullet(Things, &NumberOfThings, &FirstFreeThing, FrameAlienIndex, &BulletSprite);
+				}
 			}
 		}
 		
@@ -2041,6 +2114,12 @@ And then the game loads in the textures with mipmaps included.
 				continue;
 			
 			thing *Thing = Things + ThingIndex;
+			
+			if(Thing->IsDeleted)
+				continue;
+			
+			if(Thing->IsBullet)
+				continue;
 			
 			Vector2 ThingColP = Thing->FrameBaseP;
 			float ThingColRadius = 0.5f*(float)Thing->Billboard->TextureRight.width*Thing->FrameScale + PlayerColHalfLength;
@@ -2068,11 +2147,11 @@ And then the game loads in the textures with mipmaps included.
 		
 		
 		//NOTE(moritz): Basic-ass alien behaviour
-		if(Things[FrameAlienIndex].Distance < TWEAK(5.0f))
-			Things[FrameAlienIndex].Speed += Max( (1.0f/Things[FrameAlienIndex].Distance), 0.0325f);
+		if(Things[FrameAlienIndex].Distance < TWEAK(9.0f))
+			Things[FrameAlienIndex].Speed += Max( (1.0f/Things[FrameAlienIndex].Distance), 0.05f);
 		
 		if(Things[FrameAlienIndex].Distance > TWEAK(10.0f))
-			Things[FrameAlienIndex].Speed -= Min( Things[FrameAlienIndex].Distance*TWEAK(0.1f), 0.65f);
+			Things[FrameAlienIndex].Speed -= Min( Things[FrameAlienIndex].Distance*TWEAK(0.05f), 0.5f);
 		
 		if(Things[FrameAlienIndex].Distance < 2.5f)
 			Things[FrameAlienIndex].Distance = 2.5f;
