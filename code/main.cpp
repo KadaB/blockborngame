@@ -766,6 +766,9 @@ struct thing
 	
 	float Speed;
 	
+	//NOTE(moritz): This one only for the alien
+	float ShootTimer; //in seconds
+	
 	int BandIndex; //0: vehicles... 1: first band etc...
 	
 	//NOTE(moritz): Only relevant for roadside decoration
@@ -1013,18 +1016,22 @@ bool isImageClicked(const Vector2 & image_position, const float & image_scale, c
 	if(image_scale != 0.0f)
 		OneOverImageScale = 1.0f/image_scale;
 	
+	Vector2 Shrink = {5.0f, 5.0f};
 	Vector2 in_image_pos = (GetMousePosition() - image_position)*OneOverImageScale;
 	
 	
 	
-	if(in_image_pos.x >= 0 && in_image_pos.x < query_image.width
-	   && in_image_pos.y >= 0 && in_image_pos.y < query_image.height) {
+	if( (in_image_pos.x + Shrink.x) >= 0 && (in_image_pos.x - Shrink.x) < query_image.width
+	   && (in_image_pos.y + Shrink.y) >= 0 && (in_image_pos.y - Shrink.y) < query_image.height) {
 		// look into image data
 		Color color = GetImageColor(query_image, in_image_pos.x, in_image_pos.y);
 		
+		return true;
+#if 0
 		if(color.a > 128) {
 			return true;
 		}
+#endif
 	}
 	return false;
 }
@@ -1097,6 +1104,14 @@ LineLineIntersect(Vector2 P1, Vector2 P2,
 	(tB <= 1.0f);
 	
 	return(Result);
+}
+
+void
+AddAlienBullet(things *Things, int NumberOfThings, thing **FirstFreeThing)
+{
+	if(FirstFreeThing)
+	{
+	}
 }
 
 int
@@ -1624,14 +1639,24 @@ And then the game loads in the textures with mipmaps included.
 	
 	int NumberOfThings = 2*ThingsPerSide;
 	
-	//NOTE(moritz): Civilian car
-	Things[NumberOfThings].Billboard = &CivilianSprite;
-	Things[NumberOfThings].Speed     = 10.0f;
-	Things[NumberOfThings].Distance  = 20.0f;
-	Things[NumberOfThings].XOffset   = 200.0f;
-	Things[NumberOfThings].Tint      = WHITE;
-	
-	++NumberOfThings;
+	//NOTE(moritz): Civilian cars
+	float CivCarSpacing = 5.0f;
+	float CivCarDist = 5.0f;
+	for(int CivCarIndex = 0;
+		CivCarIndex < 12;
+		++CivCarIndex)
+	{
+		float RoadSide = (CivCarIndex % 2) ? 1.0f : -1.0f;
+		
+		CivCarSpacing += RandomBilateral(&RoadEntropy)*2.0f;
+		
+		Things[NumberOfThings].Billboard = &CivilianSprite;
+		Things[NumberOfThings].Speed     = 10.0f;
+		Things[NumberOfThings].Distance  = CivCarDist + (float)CivCarIndex * CivCarSpacing;
+		Things[NumberOfThings].XOffset   = 200.0f*RoadSide;
+		Things[NumberOfThings].Tint      = WHITE;
+		++NumberOfThings;
+	}
 	
 	//NOTE(moritz): Alien :O
 	Things[NumberOfThings].Billboard = &AlienSprite;
@@ -1640,8 +1665,10 @@ And then the game loads in the textures with mipmaps included.
 	Things[NumberOfThings].XOffset   = 0.0f;
 	Things[NumberOfThings].Tint      = WHITE;
 	Things[NumberOfThings].IsAlien   = true;
+	Things[NumberOfThings].ShootTimer = 1.0f;
 	
 	++NumberOfThings;
+	
 	
 	//---------------------------------------------------------
 	
@@ -1737,7 +1764,7 @@ And then the game loads in the textures with mipmaps included.
 			PlayerColP.x += TWEAK(0.0f);
 			PlayerColP.y += TWEAK(0.0f);
 			
-			PlayerColHalfLength = TWEAK(60.0f);
+			PlayerColHalfLength = TWEAK(40.0f);
 		}
 		
 #if 0
@@ -1946,7 +1973,14 @@ And then the game loads in the textures with mipmaps included.
 			}
 			
 			if(Things[ThingIndex].IsAlien)
+			{
 				FrameAlienIndex = ThingIndex;
+				
+				Things[ThingIndex].ShootTimer -= dtForFrame;
+				
+				if(dtForFrame < 0.0f)
+					Things[ThingIndex].ShootTimer = 1.0f;
+			}
 		}
 		
 		//NOTE(moritz): Collision test against the 5? closest things
@@ -1983,13 +2017,19 @@ And then the game loads in the textures with mipmaps included.
 			//DrawLineEx(ThingColStart, ThingColEnd, 2.0f, RED);
 		}
 		
+		
 		//NOTE(moritz): Basic-ass alien behaviour
 		if(Things[FrameAlienIndex].Distance < TWEAK(5.0f))
-			Things[FrameAlienIndex].Speed +=Max( (1.0f/Things[FrameAlienIndex].Distance)*TWEAK(1.0f), 28.0f);
+			Things[FrameAlienIndex].Speed += Max( (1.0f/Things[FrameAlienIndex].Distance), 0.0325f);
 		
-		if(Things[FrameAlienIndex].Distance > TWEAK(20.0f))
-			Things[FrameAlienIndex].Speed -= Things[FrameAlienIndex].Distance*TWEAK(0.1f);
+		if(Things[FrameAlienIndex].Distance > TWEAK(10.0f))
+			Things[FrameAlienIndex].Speed -= Min( Things[FrameAlienIndex].Distance*TWEAK(0.1f), 0.65f);
 		
+		if(Things[FrameAlienIndex].Distance < 2.5f)
+			Things[FrameAlienIndex].Distance = 2.5f;
+		
+		if(Things[FrameAlienIndex].Distance > 15.0f)
+			Things[FrameAlienIndex].Distance = 15.0f;
 		
 		//BeginDrawing();
 		BeginTextureMode(TargetTexture);
