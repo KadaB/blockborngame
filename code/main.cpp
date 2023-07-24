@@ -766,6 +766,8 @@ struct thing
 	
 	float Speed;
 	
+	int BandIndex; //0: vehicles... 1: first band etc...
+	
 	//NOTE(moritz): Only relevant for roadside decoration
 	float RoadSide; //NOTE(moritz): -1: left, 1: right.. 0: vehicle?
 	
@@ -967,10 +969,23 @@ DrawBillboard(billboard *Billboard, thing *Thing)
 	
 	DrawTextureEx(CurrentTexture, Thing->FramePosition, 0.0f, Thing->FrameScale, Thing->Tint);
 	
-#if 0
+#if 1
+	//NOTE(moritz): Vis for sprite hot spots
 	Vector2 TestSize = {5.0f, 5.0f};
 	DrawRectangleV(Thing->FrameBaseP, TestSize, RED);
 	DrawRectangleV(Thing->FramePosition, TestSize, BLACK);
+#endif
+	
+#if 1
+	//NOTE(moritz): Collision line vis
+	float ColHalfLength = 0.5f*(float)CurrentTexture.width*Thing->FrameScale;
+	Vector2 ColLineStart;
+	ColLineStart.x = Thing->FrameBaseP.x - ColHalfLength;
+	ColLineStart.y = Thing->FrameBaseP.y;
+	Vector2 ColLineEnd;
+	ColLineEnd.x = Thing->FrameBaseP.x + ColHalfLength;
+	ColLineEnd.y = Thing->FrameBaseP.y;
+	DrawLineEx(ColLineStart, ColLineEnd, 2.0f, BROWN);
 #endif
 }
 
@@ -1439,7 +1454,7 @@ And then the game loads in the textures with mipmaps included.
 	
 	billboard AlienSprite;
 	AlienSprite.SpriteScale = 3.0f;
-	AlienSprite.SpriteVerticalTweak = 0.0f;
+	AlienSprite.SpriteVerticalTweak = -0.6f;
 	AlienSprite.TextureRight = AlienTexture;
 	AlienSprite.TextureLeft  = AlienTexture;
 	
@@ -1453,13 +1468,16 @@ And then the game loads in the textures with mipmaps included.
 	int ThingsPerSide = THINGS_PER_BAND*4;
 	
 	//NOTE(moritz): Right side
-	float MaxPlaceDistance = -F32Max;
+	//float MaxPlaceDistance = -F32Max;
+	float BandMaxPlaceDistances[4] = {};
 	float CurrentDistance = 0.0f;
 	for(int ThingIndex = 0;
 		ThingIndex < ThingsPerSide;
 		++ThingIndex)
 	{
 		SideBandIndex = ThingIndex/THINGS_PER_BAND;
+		
+		Things[ThingIndex].BandIndex = SideBandIndex + 1;
 		
 		float fSideBand = (float)SideBandIndex; //0 is lamps
 		
@@ -1488,6 +1506,7 @@ And then the game loads in the textures with mipmaps included.
 				Things[ThingIndex].Billboard = &TreeSprite;
 			
 			DistanceSpacing = 10.0f + 30.0f*RandomUnilateral(&RoadEntropy);
+			
 		}
 		else
 		{
@@ -1500,7 +1519,9 @@ And then the game loads in the textures with mipmaps included.
 		
 		CurrentDistance += DistanceSpacing;
 		
-		MaxPlaceDistance = Max(MaxPlaceDistance, CurrentDistance);
+		BandMaxPlaceDistances[SideBandIndex] = Max(BandMaxPlaceDistances[SideBandIndex], CurrentDistance);
+		
+		//MaxPlaceDistance = Max(MaxPlaceDistance, CurrentDistance);
 		
 		//NOTE(moritz): Prep next band filling
 		if(((ThingIndex + 1)/THINGS_PER_BAND) > SideBandIndex)
@@ -1516,6 +1537,8 @@ And then the game loads in the textures with mipmaps included.
 		++ThingIndex)
 	{
 		SideBandIndex = (ThingIndex - ThingIndexOffset)/THINGS_PER_BAND;
+		
+		Things[ThingIndex].BandIndex = SideBandIndex + 1;
 		
 		float fSideBand = (float)SideBandIndex; //0 is lamps
 		
@@ -1554,7 +1577,9 @@ And then the game loads in the textures with mipmaps included.
 		
 		CurrentDistance += DistanceSpacing;
 		
-		MaxPlaceDistance = Max(MaxPlaceDistance, CurrentDistance);
+		BandMaxPlaceDistances[SideBandIndex] = Max(BandMaxPlaceDistances[SideBandIndex], CurrentDistance);
+		
+		//MaxPlaceDistance = Max(MaxPlaceDistance, CurrentDistance);
 		
 		//NOTE(moritz): Prep next band filling
 		if(((ThingIndex + 1 - ThingIndexOffset)/THINGS_PER_BAND) > SideBandIndex)
@@ -1587,6 +1612,13 @@ And then the game loads in the textures with mipmaps included.
 	//NOTE(moritz): Player
 	float PlayerSpeed = 0.0f;
 	float PlayerP     = 0.0f;
+	
+	Vector2 PlayerColP =
+	{
+		0.5f*fScreenWidth, // - 0.5f*(float)CarTexture.width,
+		fScreenHeight - 60.0f // - (float)CarTexture.height
+	};
+	float PlayerColHalfLength = 0.0f;
 	
 	float PlayerBaseXOffset = 0.0f;
 	
@@ -1656,11 +1688,19 @@ And then the game loads in the textures with mipmaps included.
 			}
 		}
 		
+		//NOTE(moritz): Collision tweaking station
+		{
+			PlayerColP.x += TWEAK(0.0f);
+			PlayerColP.y += TWEAK(0.0f);
+			
+			PlayerColHalfLength = TWEAK(60.0f);
+		}
+		
 #if 0
 		//NOTE(moritz): Sprite tweaking station
 		{
-			TreeSprite.SpriteScale = TWEAK(6.0f);
-			TreeSprite.SpriteVerticalTweak = TWEAK(0.06f);
+			//TreeSprite.SpriteScale = TWEAK(6.0f);
+			//AlienSprite.SpriteVerticalTweak = TWEAK(-0.6f);
 		}
 #endif
 		
@@ -1808,7 +1848,14 @@ And then the game loads in the textures with mipmaps included.
 			Things[ThingIndex].Distance += -dPlayerP + Things[ThingIndex].Speed*dtForFrame;
 			
 			if(Things[ThingIndex].Distance < 0.0f)
-				Things[ThingIndex].Distance = MaxPlaceDistance;
+			{
+				int BandIndex = Things[ThingIndex].BandIndex - 1;
+				if(BandIndex < 0)
+					BandIndex = 0;
+				
+				Things[ThingIndex].Distance = BandMaxPlaceDistances[BandIndex];
+			}
+			//Things[ThingIndex].Distance = MaxPlaceDistance;
 		}
 		
 		//NOTE(moritz): Sort thing positions back to front
@@ -1951,6 +1998,14 @@ And then the game loads in the textures with mipmaps included.
 		car.position = PlayerCarP;
 		car.draw(dtForFrame);
 		
+		//NOTE(moritz): vis for palyer collision line
+		{
+			Vector2 ColLineStart = PlayerCarP;
+			ColLineStart.x -= PlayerColHalfLength;
+			Vector2 ColLineEnd   = PlayerCarP;
+			ColLineEnd.x   += PlayerColHalfLength;
+			DrawLineEx(ColLineStart, ColLineEnd, 2.0f, WHITE);
+		}
 		
 #if 0
 		//NOTE(moritz): Visualise where the segments are at...
