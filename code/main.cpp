@@ -1038,8 +1038,8 @@ struct _Skyline {
 	}
 
 	const float panning[5] = {1.f/10, 1.f/8, 1.f/6, 1.f/4, 1.f/2};
-	const float pan_min = 2;
-	const float pan_max = 15;
+	const float pan_min = 1;
+	const float pan_max = 100;
 
 	Texture2D SkylineTextures[5] = {
 		loadAndSetWrap("city0.png"),
