@@ -1190,7 +1190,8 @@ main()
 	link_pool LinkPool = {};
 	link_list LinkList = {};
 	
-	unsigned int AlienHitCount = 0;
+	int AlienHitCount = 100;
+	int HighScore     = AlienHitCount;
 	
 	//---------------------------------------------------------
 	
@@ -1842,6 +1843,8 @@ And then the game loads in the textures with mipmaps included.
 	
 	_Skyline skyline(ScreenWidth, ScreenHeight);
 	
+	bool ShowHighScore = false;
+	
 	//NOTE(moritz): Main loop
 	//TODO(moritz): Mind what is said about main loops for wasm apps...
 	while(!WindowShouldClose())
@@ -1873,426 +1876,458 @@ And then the game loads in the textures with mipmaps included.
 			}
 		}
 		
-		//NOTE(moritz): Collision tweaking station
+		if(!ShowHighScore)
 		{
-			PlayerColP.x += TWEAK(0.0f);
-			PlayerColP.y += TWEAK(0.0f);
 			
-			PlayerColHalfLength = TWEAK(40.0f);
-		}
-		
-#if 0
-		//NOTE(moritz): Sprite tweaking station
-		{
-			//TreeSprite.SpriteScale = TWEAK(6.0f);
-			//AlienSprite.SpriteVerticalTweak = TWEAK(-0.6f);
-		}
-#endif
-		
-		float dtForFrame = GetFrameTime();
-		
-		//dtForFrame *= TWEAK(0.8f);
-		
-		//Max speed ~28.0f
-		// PlayerSpeed = TWEAK(10.0f);
-		
-		float PlayerAcceleration = TWEAK(10.0f)*dtForFrame;
-		
-		if(IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) {
-			PlayerSpeed += PlayerAcceleration;
-			car.fire_animation1.scale = 1.1;
-			car.fire_animation2.scale = 1.1;
-		}
-		else {
-			car.fire_animation1.scale = .7;
-			car.fire_animation2.scale = .7;
-		}
-		
-		if(IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) {
-			PlayerSpeed -= PlayerAcceleration;
-			car.fire_animation1.scale = .2;
-			car.fire_animation2.scale = .2;
-		}
-		engine_sound_state.update(PlayerSpeed);
-		
-		if(PlayerSpeed <= 0.0f)
-			PlayerSpeed = 0.0f;
-		
-		float SpeedDragForce = TWEAK(0.0125f)*PlayerSpeed*PlayerSpeed*dtForFrame;
-		
-		PlayerSpeed -= SpeedDragForce;
-		
-		if(fabs(PlayerSpeed) < TWEAK(0.15f))
-			PlayerSpeed = 0.0f;
-		
-		//NOTE(moritz): Update player position
-		float dPlayerP = PlayerSpeed*dtForFrame;
-		//TODO(moritz): Floating point precision for PlayerP
-		PlayerP += dPlayerP;
-		
-		float MaxSteerFactor = TWEAK(80.0f);
-		float MinSteerFactor = TWEAK(30.0f);
-		
-		
-		//NOTE(moritz): Max speed is currently like ~25.0f
-		float SteerFactorT = (PlayerSpeed/28.0f);
-		SteerFactorT = ClampM(0.0f, SteerFactorT, 1.0f);
-		
-		float MinSteering = TWEAK(10.0f);
-		
-		float SteerFactor = LerpM(MaxSteerFactor, SteerFactorT, MinSteerFactor);
-		
-		const float steer_speed = 200.f;
-		const float max_steer = 50.f;
-		float lenkAcceleration = steer_speed * dtForFrame;
-		if(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
-			// PlayerBaseXOffset += Max(dPlayerP*SteerFactor, MinSteering);
-			car.orientation = -CAR_TILT;
-			lenkVelocity = Max(lenkVelocity, 0) + lenkAcceleration;
-		}
-		else if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) {
-			// PlayerBaseXOffset -= Max(dPlayerP*SteerFactor, MinSteering);
-			car.orientation = CAR_TILT;
-			lenkVelocity = Min(lenkVelocity, 0) - lenkAcceleration;
-		}
-		else {
-			const float zero_epsilon = 1e-3f;
-			lenkVelocity += -1*Sign(lenkVelocity)*lenkAcceleration;
-			lenkVelocity = fabs(lenkVelocity) < zero_epsilon ? 0.f : lenkVelocity;
-		}
-		
-		lenkVelocity = ClampM(-max_steer, lenkVelocity, max_steer);
-		car.orientation = (-lenkVelocity / max_steer) * 20.f;
-		float final_lenkVelocity = lenkVelocity*SteerFactor * dtForFrame;
-		
-		PlayerBaseXOffset += final_lenkVelocity;
-		accumulatedVelocity += final_lenkVelocity*accumulatedVelocityDamping;
-		
-		//NOTE(moritz): Update active segments position
-		float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
-		
-		for(road_segment *Segment = ActiveRoadList.First;
-			Segment;
-			Segment = Segment->Next)
-		{
-			Segment->Position -= RoadDelta;
-		}
-		
-		//NOTE(moritz): Road segment tweaking
-		//ActiveRoadList.First->ddX = TWEAK(0.1f);
-#if 0
-		ActiveRoadList.First->EndRelPX = TWEAK(1300.0f);
-		ActiveRoadList.First->ddX      = 2.0f*(ActiveRoadList.First->EndRelPX)/(MaxDistance*(MaxDistance + 1.0f));
-#endif
-		
-		
-		if(ActiveRoadList.Last->Position < 1.0f)
-		{
-			road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
-			
-			InitSegment(NewSegment, ActiveRoadList.Last, &RoadEntropy, MaxDistance);
-			
-			Append(&ActiveRoadList, NewSegment);
-		}
-		
-		//NOTE(moritz): Set new base segment and generate new segment
-		if(ActiveRoadList.First->Next->Position <= 0.0f)
-		{
-			DeleteHeadSegment(&ActiveRoadList, &RoadPool);
-			
-			road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
-			
-			InitSegment(NewSegment, ActiveRoadList.Last, &RoadEntropy, MaxDistance);
-			
-			Append(&ActiveRoadList, NewSegment);
-		}
-		
-		float CurveForceT = 1.0f - ActiveRoadList.First->Next->Position;;
-		
-		CurveForceT = ClampM(0.0f, CurveForceT, 1.0f);
-		
-		float CurveForce = PlayerSpeed*TWEAK(50.0f)*LerpM(ActiveRoadList.First->ddX, CurveForceT, ActiveRoadList.First->Next->ddX);
-		
-		PlayerBaseXOffset += CurveForce;
-		
-		float OffRoadLimit = TWEAK(1000.0f);
-		PlayerBaseXOffset = ClampM(-OffRoadLimit, PlayerBaseXOffset, OffRoadLimit);
-		
-		
-		
-#if 0
-		//NOTE(moritz): Update billboard positions
-		TreeDistance -= dPlayerP;
-		if((TreeDistance < 0.0f)/* && NewBottomSegment*/) //TODO(moritz): poor man's way of syncing tree spawn with segment swap to avoid weird bug
-			TreeDistance = MaxDistance + 1.0f;
-#endif
-		//NOTE(moritz): Update thing positions
-		for(int ThingIndex = 0;
-			ThingIndex < NumberOfThings;
-			++ThingIndex)
-		{
-			if(Things[ThingIndex].IsDeleted)
-				continue;
-			
-			Things[ThingIndex].Distance += -dPlayerP + Things[ThingIndex].Speed*dtForFrame;
-			
-			if(Things[ThingIndex].Distance < 0.0f)
+			//NOTE(moritz): Collision tweaking station
 			{
-				int BandIndex = Things[ThingIndex].BandIndex - 1;
-				if(BandIndex < 0)
-					BandIndex = 1;
+				PlayerColP.x += TWEAK(0.0f);
+				PlayerColP.y += TWEAK(0.0f);
 				
-				Things[ThingIndex].Distance = BandMaxPlaceDistances[BandIndex];
-				
-				if(Things[ThingIndex].IsBullet)
-					DeleteBullet(Things + ThingIndex, &FirstFreeThing);
+				PlayerColHalfLength = TWEAK(40.0f);
 			}
-			//Things[ThingIndex].Distance = MaxPlaceDistance;
-		}
-		
-		//NOTE(moritz): Sort thing positions back to front
-		bool SwapHappened = false;
-		for(int Outer = 0;
-			Outer < NumberOfThings;
-			++Outer)
-		{
-			SwapHappened = false;
 			
-			for(int Inner = 0;
-				Inner < (NumberOfThings - 1);
-				++Inner)
+#if 0
+			//NOTE(moritz): Sprite tweaking station
 			{
-				thing *EntryA = Things + Inner;
-				thing *EntryB = Things + Inner + 1;
+				//TreeSprite.SpriteScale = TWEAK(6.0f);
+				//AlienSprite.SpriteVerticalTweak = TWEAK(-0.6f);
+			}
+#endif
+			
+			float dtForFrame = GetFrameTime();
+			
+			//dtForFrame *= TWEAK(0.8f);
+			
+			//Max speed ~28.0f
+			// PlayerSpeed = TWEAK(10.0f);
+			
+			float PlayerAcceleration = TWEAK(10.0f)*dtForFrame;
+			
+			if(IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) {
+				PlayerSpeed += PlayerAcceleration;
+				car.fire_animation1.scale = 1.1;
+				car.fire_animation2.scale = 1.1;
+			}
+			else {
+				car.fire_animation1.scale = .7;
+				car.fire_animation2.scale = .7;
+			}
+			
+			if(IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) {
+				PlayerSpeed -= PlayerAcceleration;
+				car.fire_animation1.scale = .2;
+				car.fire_animation2.scale = .2;
+			}
+			engine_sound_state.update(PlayerSpeed);
+			
+			if(PlayerSpeed <= 0.0f)
+				PlayerSpeed = 0.0f;
+			
+			float SpeedDragForce = TWEAK(0.0125f)*PlayerSpeed*PlayerSpeed*dtForFrame;
+			
+			PlayerSpeed -= SpeedDragForce;
+			
+			if(fabs(PlayerSpeed) < TWEAK(0.15f))
+				PlayerSpeed = 0.0f;
+			
+			//NOTE(moritz): Update player position
+			float dPlayerP = PlayerSpeed*dtForFrame;
+			//TODO(moritz): Floating point precision for PlayerP
+			PlayerP += dPlayerP;
+			
+			float MaxSteerFactor = TWEAK(80.0f);
+			float MinSteerFactor = TWEAK(30.0f);
+			
+			
+			//NOTE(moritz): Max speed is currently like ~25.0f
+			float SteerFactorT = (PlayerSpeed/28.0f);
+			SteerFactorT = ClampM(0.0f, SteerFactorT, 1.0f);
+			
+			float MinSteering = TWEAK(10.0f);
+			
+			float SteerFactor = LerpM(MaxSteerFactor, SteerFactorT, MinSteerFactor);
+			
+			const float steer_speed = 200.f;
+			const float max_steer = 50.f;
+			float lenkAcceleration = steer_speed * dtForFrame;
+			if(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
+				// PlayerBaseXOffset += Max(dPlayerP*SteerFactor, MinSteering);
+				car.orientation = -CAR_TILT;
+				lenkVelocity = Max(lenkVelocity, 0) + lenkAcceleration;
+			}
+			else if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) {
+				// PlayerBaseXOffset -= Max(dPlayerP*SteerFactor, MinSteering);
+				car.orientation = CAR_TILT;
+				lenkVelocity = Min(lenkVelocity, 0) - lenkAcceleration;
+			}
+			else {
+				const float zero_epsilon = 1e-3f;
+				lenkVelocity += -1*Sign(lenkVelocity)*lenkAcceleration;
+				lenkVelocity = fabs(lenkVelocity) < zero_epsilon ? 0.f : lenkVelocity;
+			}
+			
+			lenkVelocity = ClampM(-max_steer, lenkVelocity, max_steer);
+			car.orientation = (-lenkVelocity / max_steer) * 20.f;
+			float final_lenkVelocity = lenkVelocity*SteerFactor * dtForFrame;
+			
+			PlayerBaseXOffset += final_lenkVelocity;
+			accumulatedVelocity += final_lenkVelocity*accumulatedVelocityDamping;
+			
+			//NOTE(moritz): Update active segments position
+			float RoadDelta = TWEAK(1.0f)*dPlayerP/MaxDistance;
+			
+			for(road_segment *Segment = ActiveRoadList.First;
+				Segment;
+				Segment = Segment->Next)
+			{
+				Segment->Position -= RoadDelta;
+			}
+			
+			//NOTE(moritz): Road segment tweaking
+			//ActiveRoadList.First->ddX = TWEAK(0.1f);
+#if 0
+			ActiveRoadList.First->EndRelPX = TWEAK(1300.0f);
+			ActiveRoadList.First->ddX      = 2.0f*(ActiveRoadList.First->EndRelPX)/(MaxDistance*(MaxDistance + 1.0f));
+#endif
+			
+			
+			if(ActiveRoadList.Last->Position < 1.0f)
+			{
+				road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
 				
-				if(EntryA->Distance < EntryB->Distance)
+				InitSegment(NewSegment, ActiveRoadList.Last, &RoadEntropy, MaxDistance);
+				
+				Append(&ActiveRoadList, NewSegment);
+			}
+			
+			//NOTE(moritz): Set new base segment and generate new segment
+			if(ActiveRoadList.First->Next->Position <= 0.0f)
+			{
+				DeleteHeadSegment(&ActiveRoadList, &RoadPool);
+				
+				road_segment *NewSegment = AllocateRoadSegment(&RoadPool);
+				
+				InitSegment(NewSegment, ActiveRoadList.Last, &RoadEntropy, MaxDistance);
+				
+				Append(&ActiveRoadList, NewSegment);
+			}
+			
+			float CurveForceT = 1.0f - ActiveRoadList.First->Next->Position;;
+			
+			CurveForceT = ClampM(0.0f, CurveForceT, 1.0f);
+			
+			float CurveForce = PlayerSpeed*TWEAK(50.0f)*LerpM(ActiveRoadList.First->ddX, CurveForceT, ActiveRoadList.First->Next->ddX);
+			
+			PlayerBaseXOffset += CurveForce;
+			
+			float OffRoadLimit = TWEAK(1000.0f);
+			PlayerBaseXOffset = ClampM(-OffRoadLimit, PlayerBaseXOffset, OffRoadLimit);
+			
+			
+			
+#if 0
+			//NOTE(moritz): Update billboard positions
+			TreeDistance -= dPlayerP;
+			if((TreeDistance < 0.0f)/* && NewBottomSegment*/) //TODO(moritz): poor man's way of syncing tree spawn with segment swap to avoid weird bug
+				TreeDistance = MaxDistance + 1.0f;
+#endif
+			//NOTE(moritz): Update thing positions
+			for(int ThingIndex = 0;
+				ThingIndex < NumberOfThings;
+				++ThingIndex)
+			{
+				if(Things[ThingIndex].IsDeleted)
+					continue;
+				
+				Things[ThingIndex].Distance += -dPlayerP + Things[ThingIndex].Speed*dtForFrame;
+				
+				if(Things[ThingIndex].Distance < 0.0f)
 				{
-					thing Temp = *EntryA;
-					*EntryA = *EntryB;
-					*EntryB = Temp;
+					int BandIndex = Things[ThingIndex].BandIndex - 1;
+					if(BandIndex < 0)
+						BandIndex = 1;
 					
-					SwapHappened = true;
+					Things[ThingIndex].Distance = BandMaxPlaceDistances[BandIndex];
+					
+					if(Things[ThingIndex].IsBullet)
+						DeleteBullet(Things + ThingIndex, &FirstFreeThing);
 				}
+				//Things[ThingIndex].Distance = MaxPlaceDistance;
 			}
 			
-			if(!SwapHappened) //NOTE(moritz): Early out
-				break;
-		}
-		
-		//NOTE(moritz): Determine thing frame properties
-		int FrameAlienIndex = -1;
-		for(int ThingIndex = 0;
-			ThingIndex < NumberOfThings;
-			++ThingIndex)
-		{
-			if((Things[ThingIndex].Distance <= MaxDistance) &&
-			   (Things[ThingIndex].Distance > 0.1f))
+			//NOTE(moritz): Sort thing positions back to front
+			bool SwapHappened = false;
+			for(int Outer = 0;
+				Outer < NumberOfThings;
+				++Outer)
 			{
-				DetermineThingFrameProperties(Things[ThingIndex].Billboard, Things + ThingIndex,
-											  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-											  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
-			}
-			
-			if(Things[ThingIndex].IsAlien)
-			{
-				FrameAlienIndex = ThingIndex;
+				SwapHappened = false;
 				
-				Things[ThingIndex].ShootTimer -= dtForFrame;
-				
-				if(Things[ThingIndex].ShootTimer < 0.0f)
+				for(int Inner = 0;
+					Inner < (NumberOfThings - 1);
+					++Inner)
 				{
-					Things[ThingIndex].ShootTimer = 1.0f;
-					AddAlienBullet(Things, &NumberOfThings, &FirstFreeThing, FrameAlienIndex, &BulletSprite);
+					thing *EntryA = Things + Inner;
+					thing *EntryB = Things + Inner + 1;
+					
+					if(EntryA->Distance < EntryB->Distance)
+					{
+						thing Temp = *EntryA;
+						*EntryA = *EntryB;
+						*EntryB = Temp;
+						
+						SwapHappened = true;
+					}
+				}
+				
+				if(!SwapHappened) //NOTE(moritz): Early out
+					break;
+			}
+			
+			//NOTE(moritz): Determine thing frame properties
+			int FrameAlienIndex = -1;
+			for(int ThingIndex = 0;
+				ThingIndex < NumberOfThings;
+				++ThingIndex)
+			{
+				if((Things[ThingIndex].Distance <= MaxDistance) &&
+				   (Things[ThingIndex].Distance > 0.1f))
+				{
+					DetermineThingFrameProperties(Things[ThingIndex].Billboard, Things + ThingIndex,
+												  MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
+												  CameraHeight, &ActiveRoadList, PlayerBaseXOffset);
+				}
+				
+				if(Things[ThingIndex].IsAlien)
+				{
+					FrameAlienIndex = ThingIndex;
+					
+					Things[ThingIndex].ShootTimer -= dtForFrame;
+					
+					if(Things[ThingIndex].ShootTimer < 0.0f)
+					{
+						Things[ThingIndex].ShootTimer = 1.0f;
+						AddAlienBullet(Things, &NumberOfThings, &FirstFreeThing, FrameAlienIndex, &BulletSprite);
+					}
 				}
 			}
-		}
-		
-		//NOTE(moritz): Collision test against the 5? closest things
-		for(int ThingIndex = (NumberOfThings - 1);
-			ThingIndex > (NumberOfThings - 5 - 1);
-			--ThingIndex)
-		{
-			if(ThingIndex == FrameAlienIndex)
-				continue;
 			
-			thing *Thing = Things + ThingIndex;
-			
-			if(Thing->IsDeleted)
-				continue;
-			
-			if(Thing->IsBullet)
-				continue;
-			
-			Vector2 ThingColP = Thing->FrameBaseP;
-			float ThingColRadius = 0.5f*(float)Thing->Billboard->TextureRight.width*Thing->FrameScale + PlayerColHalfLength;
-			
-			Vector2 PlayerColStart = PlayerColP;
-			Vector2 PlayerColEnd   = PlayerColP;// + dPlayerP;
-			PlayerColEnd.y += TWEAK(-10.0f) - PlayerSpeed;//-PlayerSpeed;//dPlayerP/**200.0f*/;
-			
-			Vector2 ThingColStart = ThingColP;
-			ThingColStart.x -= ThingColRadius;
-			Vector2 ThingColEnd = ThingColP;
-			ThingColEnd.x += ThingColRadius;;
-			if(LineLineIntersect(PlayerColStart, PlayerColEnd,
-								 ThingColStart, ThingColEnd))
+			//NOTE(moritz): Collision test against the 5? closest things
+			for(int ThingIndex = (NumberOfThings - 1);
+				ThingIndex > (NumberOfThings - 5 - 1);
+				--ThingIndex)
 			{
-				PlayerSpeed *= 0.5f;
-				float NewLenkSign = -Sign(PlayerBaseXOffset);//-Sign(ThingColP.x - PlayerColP.x);
-				lenkVelocity = fabs(lenkVelocity)*NewLenkSign;
-				lenkVelocity *=  TWEAK(5.0f)*PlayerSpeed;
+				if(ThingIndex == FrameAlienIndex)
+					continue;
+				
+				thing *Thing = Things + ThingIndex;
+				
+				if(Thing->IsDeleted)
+					continue;
+				
+				
+				Vector2 ThingColP = Thing->FrameBaseP;
+				float ThingColRadius = 0.5f*(float)Thing->Billboard->TextureRight.width*Thing->FrameScale + PlayerColHalfLength;
+				
+				Vector2 PlayerColStart = PlayerColP;
+				Vector2 PlayerColEnd   = PlayerColP;// + dPlayerP;
+				PlayerColEnd.y += TWEAK(-10.0f) - PlayerSpeed;//-PlayerSpeed;//dPlayerP/**200.0f*/;
+				
+				Vector2 ThingColStart = ThingColP;
+				ThingColStart.x -= ThingColRadius;
+				Vector2 ThingColEnd = ThingColP;
+				ThingColEnd.x += ThingColRadius;;
+				if(LineLineIntersect(PlayerColStart, PlayerColEnd,
+									 ThingColStart, ThingColEnd))
+				{
+					if(Thing->IsBullet)
+					{
+						DeleteBullet(Thing, &FirstFreeThing);
+						
+						AlienHitCount -= 20;
+						
+						if(AlienHitCount < 0)
+							ShowHighScore = true;
+					}
+					else
+					{
+						PlayerSpeed *= 0.5f;
+						float NewLenkSign = -Sign(PlayerBaseXOffset);//-Sign(ThingColP.x - PlayerColP.x);
+						lenkVelocity = fabs(lenkVelocity)*NewLenkSign;
+						lenkVelocity *=  TWEAK(5.0f)*PlayerSpeed;
+					}
+				}
+				
+				//DrawLineEx(PlayerColStart, PlayerColEnd, 2.0f, WHITE);
+				//DrawLineEx(ThingColStart, ThingColEnd, 2.0f, RED);
 			}
 			
-			//DrawLineEx(PlayerColStart, PlayerColEnd, 2.0f, WHITE);
-			//DrawLineEx(ThingColStart, ThingColEnd, 2.0f, RED);
-		}
-		
-		
-		//NOTE(moritz): Basic-ass alien behaviour
-		if(Things[FrameAlienIndex].Distance < TWEAK(9.0f))
-			Things[FrameAlienIndex].Speed += Max( (1.0f/Things[FrameAlienIndex].Distance), 0.05f);
-		
-		if(Things[FrameAlienIndex].Distance > TWEAK(10.0f))
-			Things[FrameAlienIndex].Speed -= Min( Things[FrameAlienIndex].Distance*TWEAK(0.05f), 0.5f);
-		
-		if(Things[FrameAlienIndex].Distance < 2.5f)
-			Things[FrameAlienIndex].Distance = 2.5f;
-		
-		if(Things[FrameAlienIndex].Distance > 15.0f)
-			Things[FrameAlienIndex].Distance = 15.0f;
-		
-		//BeginDrawing();
-		BeginTextureMode(TargetTexture);
-		
-		ClearBackground(PINK);
-		DrawRectangleGradientV(0, 0, ScreenWidth, ScreenHeight/2, SkyGradientCol0, SkyGradientCol1);
-		//DrawFPS(30, 10);
-		
-		// horizon
-		dithered_horizon.draw(dtForFrame);
-		
-		//NOTE(moritz): Parallax background
-		Vector2 SunsetP;
-		SunsetP.x = TWEAK(0.125f)*accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
-		SunsetP.y = fScreenHeight - (float)SunsetTexture.height - TWEAK(200.0f);
-		DrawTextureEx(SunsetTexture, SunsetP, 0.0f, 1.0f, WHITE);
-		
-		skyline.draw(dtForFrame, accumulatedVelocity);
-		
-		//NOTE(moritz): Ground gradient
-		DrawRectangleGradientV(0, ScreenHeight/2, ScreenWidth, ScreenHeight/2,
-							   GrassGradientCol0, GrassGradientCol1);
-		
-		DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
-				 &ActiveRoadList, PlayerBaseXOffset);
-		
-		//NOTE(moritz): Draw things
-		for(int ThingIndex = 0;
-			ThingIndex < NumberOfThings;
-			++ThingIndex)
-		{
-			DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex);
-		}
-		
-		//NOTE(moritz): Draw player car
-		Vector2 PlayerCarP = 
-		{
-			0.5f*fScreenWidth, // - 0.5f*(float)CarTexture.width,
-			fScreenHeight - 60.0f // - (float)CarTexture.height
-		};
-		
-		// Draw the cross hair
-		crosshair.position = GetMousePosition();
-		crosshair.draw(dtForFrame);
-		bool isLeftPressed = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
-		
-		//bool inImage = isImageClicked(SunsetP, SunImage);
-		bool inImage = false;
-		if(FrameAlienIndex)
-			inImage = isImageClicked(Things[FrameAlienIndex].FramePosition, Things[FrameAlienIndex].FrameScale, AlienImage);
-		int new_crosshair_state = inImage ? 1 : 0;
-		if(crosshair.state == 0 && new_crosshair_state == 1) {
-			PlaySound(crosshair_blip);
-		}
-		crosshair.state = new_crosshair_state;
-		
-		if(isLeftPressed && inImage) {
-			if(!lazer_l.isRunning) {
-				lazer_l.start(&car.left_lazer_pos, GetMousePosition());
-			}
-			if(!lazer_r.isRunning) {
-				lazer_r.start(&car.right_lazer_pos, GetMousePosition());
+			
+			//NOTE(moritz): Basic-ass alien behaviour
+			if(Things[FrameAlienIndex].Distance < TWEAK(9.0f))
+				Things[FrameAlienIndex].Speed += Max( (1.0f/Things[FrameAlienIndex].Distance), 0.05f);
+			
+			if(Things[FrameAlienIndex].Distance > TWEAK(10.0f))
+				Things[FrameAlienIndex].Speed -= Min( Things[FrameAlienIndex].Distance*TWEAK(0.05f), 0.5f);
+			
+			if(Things[FrameAlienIndex].Distance < 2.5f)
+				Things[FrameAlienIndex].Distance = 2.5f;
+			
+			if(Things[FrameAlienIndex].Distance > 15.0f)
+				Things[FrameAlienIndex].Distance = 15.0f;
+			
+			//BeginDrawing();
+			BeginTextureMode(TargetTexture);
+			
+			ClearBackground(PINK);
+			DrawRectangleGradientV(0, 0, ScreenWidth, ScreenHeight/2, SkyGradientCol0, SkyGradientCol1);
+			//DrawFPS(30, 10);
+			
+			// horizon
+			dithered_horizon.draw(dtForFrame);
+			
+			//NOTE(moritz): Parallax background
+			Vector2 SunsetP;
+			SunsetP.x = TWEAK(0.125f)*accumulatedVelocity+ 0.5f*fScreenWidth - 0.5f*(float)SunsetTexture.width;
+			SunsetP.y = fScreenHeight - (float)SunsetTexture.height - TWEAK(200.0f);
+			DrawTextureEx(SunsetTexture, SunsetP, 0.0f, 1.0f, WHITE);
+			
+			skyline.draw(dtForFrame, accumulatedVelocity);
+			
+			//NOTE(moritz): Ground gradient
+			DrawRectangleGradientV(0, ScreenHeight/2, ScreenWidth, ScreenHeight/2,
+								   GrassGradientCol0, GrassGradientCol1);
+			
+			DrawRoad(PlayerP, MaxDistance, fScreenWidth, fScreenHeight, DepthLines, DepthLineCount,
+					 &ActiveRoadList, PlayerBaseXOffset);
+			
+			//NOTE(moritz): Draw things
+			for(int ThingIndex = 0;
+				ThingIndex < NumberOfThings;
+				++ThingIndex)
+			{
+				DrawBillboard(Things[ThingIndex].Billboard, Things + ThingIndex);
 			}
 			
-			PlaySound(lazer_shot);
+			//NOTE(moritz): Draw player car
+			Vector2 PlayerCarP = 
+			{
+				0.5f*fScreenWidth, // - 0.5f*(float)CarTexture.width,
+				fScreenHeight - 60.0f // - (float)CarTexture.height
+			};
 			
-			AlienHitCount += 10;
-		}
-		
-		lazer_l.draw(dtForFrame);
-		lazer_r.draw(dtForFrame);
-		
-		car.position = PlayerCarP;
-		car.draw(dtForFrame);
-		
+			// Draw the cross hair
+			crosshair.position = GetMousePosition();
+			crosshair.draw(dtForFrame);
+			bool isLeftPressed = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
+			
+			//bool inImage = isImageClicked(SunsetP, SunImage);
+			bool inImage = false;
+			if(FrameAlienIndex)
+				inImage = isImageClicked(Things[FrameAlienIndex].FramePosition, Things[FrameAlienIndex].FrameScale, AlienImage);
+			int new_crosshair_state = inImage ? 1 : 0;
+			if(crosshair.state == 0 && new_crosshair_state == 1) {
+				PlaySound(crosshair_blip);
+			}
+			crosshair.state = new_crosshair_state;
+			
+			if(isLeftPressed && inImage) {
+				if(!lazer_l.isRunning) {
+					lazer_l.start(&car.left_lazer_pos, GetMousePosition());
+				}
+				if(!lazer_r.isRunning) {
+					lazer_r.start(&car.right_lazer_pos, GetMousePosition());
+				}
+				
+				PlaySound(lazer_shot);
+				
+				AlienHitCount += 10;
+				
+				if(AlienHitCount > HighScore)
+					HighScore = AlienHitCount;
+				
+			}
+			
+			lazer_l.draw(dtForFrame);
+			lazer_r.draw(dtForFrame);
+			
+			car.position = PlayerCarP;
+			car.draw(dtForFrame);
+			
 #if 0
-		//NOTE(moritz): vis for palyer collision line
-		{
-			Vector2 ColLineStart = PlayerCarP;
-			ColLineStart.x -= PlayerColHalfLength;
-			Vector2 ColLineEnd   = PlayerCarP;
-			ColLineEnd.x   += PlayerColHalfLength;
-			DrawLineEx(ColLineStart, ColLineEnd, 2.0f, WHITE);
-		}
+			//NOTE(moritz): vis for palyer collision line
+			{
+				Vector2 ColLineStart = PlayerCarP;
+				ColLineStart.x -= PlayerColHalfLength;
+				Vector2 ColLineEnd   = PlayerCarP;
+				ColLineEnd.x   += PlayerColHalfLength;
+				DrawLineEx(ColLineStart, ColLineEnd, 2.0f, WHITE);
+			}
 #endif
-		
+			
 #if 0
-		//NOTE(moritz): Visualise where the segments are at...
-		for(road_segment *Segment = ActiveRoadList.First;
-			Segment;
-			Segment = Segment->Next)
-		{
-			float SegmentY = Segment->Position;
-			
-			Vector2 MarkerStart;
-			MarkerStart.x = 0.0f;
-			MarkerStart.y = fScreenHeight - SegmentY*MaxDistance;
-			
-			Vector2 MarkerEnd = MarkerStart;
-			MarkerEnd.x       = fScreenWidth;
-			
-			Color LineColor = ORANGE;
-			if(Segment == ActiveRoadList.First->Next)
-				LineColor = Lerp(ORANGE, CurveForceT, RED);
-			
-			DrawLineEx(MarkerStart, MarkerEnd, 4.0f, LineColor);
-		}
+			//NOTE(moritz): Visualise where the segments are at...
+			for(road_segment *Segment = ActiveRoadList.First;
+				Segment;
+				Segment = Segment->Next)
+			{
+				float SegmentY = Segment->Position;
+				
+				Vector2 MarkerStart;
+				MarkerStart.x = 0.0f;
+				MarkerStart.y = fScreenHeight - SegmentY*MaxDistance;
+				
+				Vector2 MarkerEnd = MarkerStart;
+				MarkerEnd.x       = fScreenWidth;
+				
+				Color LineColor = ORANGE;
+				if(Segment == ActiveRoadList.First->Next)
+					LineColor = Lerp(ORANGE, CurveForceT, RED);
+				
+				DrawLineEx(MarkerStart, MarkerEnd, 4.0f, LineColor);
+			}
 #endif
-		
-		crosshair.position = {(float) GetMouseX(), (float) GetMouseY()};
-		crosshair.draw(dtForFrame);
-		
-		//---------------------------------------------------------
-		
-		//DrawText(TextFormat("PlayerSpeed: %f", PlayerSpeed), 20, 20, 10, RED);
-		//DrawText(TextFormat("SteerFactor: %f", SteerFactor), 20, 30, 10, RED);
-		
-		//---------------------------------------------------------
-		
-		//EndDrawing();
-		EndTextureMode();
+			
+			crosshair.position = {(float) GetMouseX(), (float) GetMouseY()};
+			crosshair.draw(dtForFrame);
+			
+			//---------------------------------------------------------
+			
+			//DrawText(TextFormat("PlayerSpeed: %f", PlayerSpeed), 20, 20, 10, RED);
+			//DrawText(TextFormat("SteerFactor: %f", SteerFactor), 20, 30, 10, RED);
+			
+			//---------------------------------------------------------
+			
+			//EndDrawing();
+			EndTextureMode();
+			
+		}
 		
 		BeginDrawing();
 		
-		ClearBackground(PINK);
+		if(!ShowHighScore)
+		{
+			ClearBackground(PINK);
+			
+			BeginShaderMode(LottesShader);
+			
+			DrawTextureRec(TargetTexture.texture, /*(Rectangle)*/{ 0, 0, (float)TargetTexture.texture.width, (float)-TargetTexture.texture.height }, /*(Vector2)*/{ 0, 0 }, WHITE);
+			
+			EndShaderMode();
+			
+			DrawText(TextFormat("SCORE %d", AlienHitCount), 300, 10, 40, WHITE);
+		}
+		else
+		{
+			ClearBackground(BLACK);
+			
+			DrawText("HIGHSCORE", 300, 10, 40, WHITE);
+			DrawText("YOU...", 200, 60, 40, WHITE);
+			DrawText(TextFormat("%d", HighScore), 400, 60, 40, WHITE);
+		}
 		
-		BeginShaderMode(LottesShader);
 		
-		DrawTextureRec(TargetTexture.texture, /*(Rectangle)*/{ 0, 0, (float)TargetTexture.texture.width, (float)-TargetTexture.texture.height }, /*(Vector2)*/{ 0, 0 }, WHITE);
-		
-		EndShaderMode();
-		
-		DrawText(TextFormat("SCORE %u", AlienHitCount), 300, 10, 40, WHITE);
 		
 		EndDrawing();
 		
