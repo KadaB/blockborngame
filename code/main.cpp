@@ -19,7 +19,7 @@
 
 #define CAR_TILT 15.f
 
-//#define WEB_BUILD
+#define WEB_BUILD
 
 #define THINGS_PER_BAND 16
 
@@ -2233,6 +2233,13 @@ And then the game loads in the textures with mipmaps included.
 			crosshair.state = new_crosshair_state;
 			
 			if(isLeftPressed && inImage) {
+				
+				if(!lazer_l.isRunning && !lazer_r.isRunning)
+				{
+					AlienHitCount += 10;
+					PlaySound(lazer_shot);
+				}
+				
 				if(!lazer_l.isRunning) {
 					lazer_l.start(&car.left_lazer_pos, GetMousePosition());
 				}
@@ -2240,9 +2247,7 @@ And then the game loads in the textures with mipmaps included.
 					lazer_r.start(&car.right_lazer_pos, GetMousePosition());
 				}
 				
-				PlaySound(lazer_shot);
 				
-				AlienHitCount += 10;
 				
 				if(AlienHitCount > HighScore)
 					HighScore = AlienHitCount;
