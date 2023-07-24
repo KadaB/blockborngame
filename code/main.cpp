@@ -1066,10 +1066,7 @@ struct _Skyline {
 		for(int i = 0; i < 5; ++i) {
 			const Texture2D& cur_text = SkylineTextures[i];
 			const float pan_factor = getPanFactor(pan_min, pan_max , (float)i/5.);
-			float cur_panning = fmod(pan_factor *-accumulated_velocity, cur_text.width);
-			
-			const Rectangle source = {(float)fmod(cur_panning,(float) screenW), 0, (float) cur_text.width*2, (float)cur_text.height*2};
-			const Rectangle dest = { 0,0 , (float) screenW, (float) screenH};
+			float cur_panning = fmod(pan_factor * accumulated_velocity, cur_text.width);
 			
 			// repeat until multiples of screen
 			for(int pan_multipe = -1; pan_multipe*cur_text.width < screenW*2; ++pan_multipe) {
@@ -1107,7 +1104,7 @@ LineLineIntersect(Vector2 P1, Vector2 P2,
 }
 
 void
-AddAlienBullet(things *Things, int NumberOfThings, thing **FirstFreeThing)
+AddAlienBullet(thing *Things, int NumberOfThings, thing **FirstFreeThing)
 {
 	if(FirstFreeThing)
 	{
@@ -1726,7 +1723,26 @@ And then the game loads in the textures with mipmaps included.
 	
 	Sound lazer_shot;
 	Sound crosshair_blip;
-	
+
+	struct _EngineSoundState  {
+		bool isStarted = false;
+		Sound engine_go;
+
+		float last_velocity = 0.f;
+
+		void load() {
+				engine_go = LoadSound("engine_go.wav"); 
+		}
+
+		void update(float velocity) {
+			if(velocity > 0 && last_velocity - velocity > 5 && !IsSoundPlaying(engine_go)) {
+				PlaySound(engine_go);
+			}
+
+			last_velocity = velocity;
+		}
+	} engine_sound_state;
+
 	_Skyline skyline(ScreenWidth, ScreenHeight);
 	
 	//NOTE(moritz): Main loop
@@ -1753,9 +1769,10 @@ And then the game loads in the textures with mipmaps included.
 				PlayMusicStream(Music);
 				
 				// Load audio
-				lazer_shot = LoadSound("lazer.wav");         // Load WAV audio file
-				crosshair_blip = LoadSound("crosshair_blip.wav");         // Load WAV audio file
+				lazer_shot = LoadSound("lazer.wav");
+				crosshair_blip = LoadSound("crosshair_blip.wav");
 				SetSoundVolume(crosshair_blip, .5);
+				engine_sound_state.load();
 			}
 		}
 		
@@ -1788,6 +1805,8 @@ And then the game loads in the textures with mipmaps included.
 			PlayerSpeed += PlayerAcceleration;
 			car.fire_animation1.scale = 1.1;
 			car.fire_animation2.scale = 1.1;
+
+			engine_sound_state.update(PlayerSpeed);
 		}
 		else {
 			car.fire_animation1.scale = .7;
