@@ -1151,7 +1151,6 @@ main()
 	Image AlienImage = LoadImageFromTexture(AlienTexture);
 	//SetTextureFilter(AlienTexture, TEXTURE_FILTER_N);
 	
-	
 	struct _dithered_horizon {
 		Vector2 position = {0, 0};
 		Vector2 anchor = {400, 129};
@@ -1669,7 +1668,9 @@ And then the game loads in the textures with mipmaps included.
 	
 	//---------------------------------------------------------
 	Music Music = {};
-	
+
+	Sound lazer_shot;
+
 	_Skyline skyline(ScreenWidth, ScreenHeight);
 	
 	//NOTE(moritz): Main loop
@@ -1694,6 +1695,9 @@ And then the game loads in the textures with mipmaps included.
 				
 				SetMusicVolume(Music, 1.0f);
 				PlayMusicStream(Music);
+
+				// Load audio
+				lazer_shot = LoadSound("lazer.wav");         // Load WAV audio file
 			}
 		}
 		
@@ -1999,6 +2003,8 @@ And then the game loads in the textures with mipmaps included.
 			if(!lazer_r.isRunning) {
 				lazer_r.start(&car.right_lazer_pos, GetMousePosition());
 			}
+
+			PlaySound(lazer_shot);
 		}
 		
 		lazer_l.draw(dtForFrame);
@@ -2073,6 +2079,7 @@ And then the game loads in the textures with mipmaps included.
 #endif
 	}
 	
+	UnloadSound(lazer_shot);
 	CloseWindow();
 	return(0);
 }
